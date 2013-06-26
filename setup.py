@@ -29,8 +29,7 @@ def connect(dbName = 'rabaDB-0.db') :
 def setTypes() :
 	global TYPES
 	TYPES = set()
-	col = RABA_CONNECTION.cursor().execute('PRAGMA table_info(Relations)')
-	for c in col :
+	
 		TYPES.add(c[1])
 	return TYPES
 	
@@ -38,7 +37,7 @@ def hasType(name) :
 	global TYPES
 	return name in TYPES
 	
-def addType(name, fields) :
+def updateType(name, fields) :
 	global TYPES
 	if not hasType(name) :
 		try :
@@ -54,20 +53,32 @@ def addType(name, fields) :
 		print sql
 		RABA_CONNECTION.cursor().execute(sql)
 		RABA_CONNECTION.commit()
-		
 		TYPES.add(name)
-
+	else :
+		cols = set(RABA_CONNECTION.cursor().execute(('PRAGMA table_info(?)', (name,)))
+		ff = set(fields)
+		addFields = ff.difference(cols)
+		remFields = cols.difference(ff)
+		sql = ''
+		values = []
+		for f in addFields :
+			sql += ' ALTER TABLE Relations ADD ?;'
+			values.append(f)
+		
+		for f in remFields :
+			sql += ' UPDATE ? SET ?=NULL WHERE 1;'
+			values.append(name)
+			values.append(f)
+		RABA_CONNECTION.cursor().execute((sql, tuple(values)))
+		RABA_CONNECTION.commit()
+	
 def removeType(name) :
 	"""Removes a type. SQLite doesn't support the drop of columns, this simply puts NULL in all
 	the values corresponding to the type in Relations Table and drops the table associated with"""
 	global TYPES
 	if hasType(name) :
-		sql = 'UPDATE Relations SET %s=NULL WHERE 1;' % name
-		RABA_CONNECTION.cursor().execute(sql)
-		RABA_CONNECTION.commit()
-
-		sql = 'DROP TABLE IF EXISTS %s;' % name
-		RABA_CONNECTION.cursor().execute(sql)
+		sql = 'UPDATE Relations SET ?=NULL WHERE 1; DROP TABLE IF EXISTS ?;'
+		RABA_CONNECTION.cursor().execute(sql, (name, name))
 		RABA_CONNECTION.commit()
 		
 		TYPES.remove(name)	

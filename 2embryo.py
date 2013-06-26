@@ -15,48 +15,30 @@ def autoremove() :
 	for c in toRemove :
 		conf.removeType(c)
 
-_RABA_OBJECT = 0
-_RABA_PRIMITIVE = 1
-_RABA_DICTIONARY = 2
-
-class RabaDictionary(dict) :
-	_rabaidentity_ = _RABA_DICTIONARY
-	def __setitem__(self, k, v) :
-		if hasattr(k, '_rabaidentity_') and k._rabaidentity_ == _RABA_OBJECT:
-			dict.__setitem__(k, v)
-		else :
-			raise TypeError('Only subclasses of Raba can be added to a RabaDictionary')
-
-class RabaField(object) :
-	def __new__(cls, *args, **kwargs) :
-		class RabaPrimitive(args[0].__class__) :
-			_rabaidentity_ = _RABA_PRIMITIVE
-		
-		return RabaPrimitive(*args, **kwargs)
-		
-class Raba_MetaClass(type) :
-	def __new__(cls, name, bases, dct) :
-		
-		fields = []
-		exceptFields = set(('__module__', '__metaclass__', '_rabaidentity_'))
-		for k, v in dct.items():
-			if hasattr(v, '_rabaidentity_') and v._rabaidentity_ == _RABA_PRIMITIVE :
-				fields.append(k)
-		
-		if not conf.hasType(name) and name != 'Raba' :
-			conf.addType(name, fields)
-		
-		return type.__new__(cls, name, bases, dct)
-
-class __NotInstanciated :
+class __NotInstanciatedRaba :
 	__metaclass__ = type
 	def __init__(self, uniqueId, classType) :
 		self.uniqueId = uniqueId
 		self.classType = classType
+	
+class __Raba_MetaClass(type) :
+	def __new__(cls, name, bases, dct) :		
+		fields = []
+		#exceptFields = set(('__module__', '__metaclass__', '__rabaObject'))
+		#primitiveTypes = ['str', 'int', 'float']
+		for k, v in dct.items():
+			#if k.find('__') != 0 and hasattr(v, '__rabaObject') and v.__rabaObject or type(v).__name__ in primitiveTypes :
+			if k[:2] != '__' :
+				fields.append(k)
 		
+		if name != 'Raba' :
+			conf.updateType(name, fields)
+		
+		return type.__new__(cls, name, bases, dct)
+
 class Raba(object):
-	__metaclass__ = Raba_MetaClass
-	_rabaidentity_ = _RABA_OBJECT
+	__metaclass__ = __Raba_MetaClass
+	__rabaObject = True
 	
 	def __init__(self, uniqueId = None) :
 		self.load(uniqueId)
@@ -77,8 +59,10 @@ class Raba(object):
 				self.values[self.fields[i]] = row[i]
 	
 	def __propagateRaba(self) :
-		pass
-		
+		for k, v in self.__dict__.items() :
+			if k[:2] != '__' :
+				if hasattr(v, '__iter__') :
+					
 	def save(self) :
 		pass
 
@@ -97,8 +81,8 @@ class Raba(object):
 
 class Chromosome(Raba) :
 	#genes = RabaObjectList()
-	length = RabaField(10)
-	x1 = RabaField('100')
+	name = 'symb'
+	x1 = 10
 	x2 = 100
 	def __init__(self) :
 		pass
