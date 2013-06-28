@@ -6,17 +6,17 @@ TYPES = None
 
 def tableExits(name) :
 	global RABA_CONNECTION
-	sql = "SELECT name FROM sqlite_master WHERE type='table' AND name='%s';" % name
-	return RABA_CONNECTION.cursor().execute(sql).fetchone() != None
+	sql = "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
+	return RABA_CONNECTION.cursor().execute(sql, (name, )).fetchone() != None
 	
-def init(rabaDBStorage = 'rabaDB') :
-	if not os.path.exists(rabaDBStorage) :
-		print "raba storage path %s not found, creating it..." % rabaDBStorage
-		os.makedirs(rabaDBStorage)
+#def init(rabaDBStorage = 'rabaDB') :
+#	if not os.path.exists(rabaDBStorage) :
+#		print "raba storage path %s not found, creating it..." % rabaDBStorage
+#		os.makedirs(rabaDBStorage)
 	
-def connect(dbName = 'rabaDB-0.db') :
+def connect(dbFileName = '/u/daoudat/usr/lib/python/rabaDB/rabaDB-0.db') :
 	global RABA_CONNECTION
-	RABA_CONNECTION = sq.connect(dbName)
+	RABA_CONNECTION = sq.connect(dbFileName)
 	
 	if not tableExits('Relations') :
 		print "table Relations not found, creating it..."
@@ -29,7 +29,9 @@ def connect(dbName = 'rabaDB-0.db') :
 def setTypes() :
 	global TYPES
 	TYPES = set()
-	
+	RABA_CONNECTION.cursor().execute('PRAGMA table_info(chromosomes);')
+	for c in RABA_CONNECTION.cursor() :
+		print 'aa', c
 		TYPES.add(c[1])
 	return TYPES
 	
@@ -55,7 +57,7 @@ def updateType(name, fields) :
 		RABA_CONNECTION.commit()
 		TYPES.add(name)
 	else :
-		cols = set(RABA_CONNECTION.cursor().execute(('PRAGMA table_info(?)', (name,)))
+		cols = set(RABA_CONNECTION.cursor().execute(('PRAGMA table_info(?)', (name,))))
 		ff = set(fields)
 		addFields = ff.difference(cols)
 		remFields = cols.difference(ff)
@@ -90,6 +92,5 @@ def autoclean() :
 	pass
 
 
-init()
 RABA_CONNECTION = connect()
 setTypes()
