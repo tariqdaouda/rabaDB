@@ -28,10 +28,11 @@ def connect(dbFileName = '/u/daoudat/usr/lib/python/rabaDB/rabaDB-0.db') :
 	
 def setTypes() :
 	global TYPES
+	global RABA_CONNECTION
 	TYPES = set()
-	RABA_CONNECTION.cursor().execute('PRAGMA table_info(chromosomes);')
-	for c in RABA_CONNECTION.cursor() :
-		print 'aa', c
+	cur = RABA_CONNECTION.cursor()
+	cur.execute('PRAGMA table_info(relations);')
+	for c in cur :
 		TYPES.add(c[1])
 	return TYPES
 	
@@ -52,26 +53,29 @@ def updateType(name, fields) :
 			#	raise e
 	
 		sql = 'CREATE TABLE %s (id INTEGER PRIMARY KEY AUTOINCREMENT, %s);' % (name, ', '.join(list(fields)))
-		print sql
 		RABA_CONNECTION.cursor().execute(sql)
 		RABA_CONNECTION.commit()
 		TYPES.add(name)
 	else :
-		cols = set(RABA_CONNECTION.cursor().execute(('PRAGMA table_info(?)', (name,))))
+		cur = RABA_CONNECTION.cursor()
+		cur.execute('PRAGMA table_info(%s)' % name)
+		cols = set()
+		for c in cur :
+			cols.add(c[1])
+		cols.remove('id')
+		
 		ff = set(fields)
 		addFields = ff.difference(cols)
 		remFields = cols.difference(ff)
+		
 		sql = ''
 		values = []
 		for f in addFields :
-			sql += ' ALTER TABLE Relations ADD ?;'
-			values.append(f)
+			cur.execute('ALTER TABLE %s ADD %s;' % (name, f))
 		
 		for f in remFields :
-			sql += ' UPDATE ? SET ?=NULL WHERE 1;'
-			values.append(name)
-			values.append(f)
-		RABA_CONNECTION.cursor().execute((sql, tuple(values)))
+			cur.execute('UPDATE %s SET %s=NULL WHERE 1;' % (name, f))
+		
 		RABA_CONNECTION.commit()
 	
 def removeType(name) :
@@ -79,8 +83,8 @@ def removeType(name) :
 	the values corresponding to the type in Relations Table and drops the table associated with"""
 	global TYPES
 	if hasType(name) :
-		sql = 'UPDATE Relations SET ?=NULL WHERE 1; DROP TABLE IF EXISTS ?;'
-		RABA_CONNECTION.cursor().execute(sql, (name, name))
+		RABA_CONNECTION.cursor().execute('UPDATE Relations SET %s=NULL WHERE 1;' % name)
+		RABA_CONNECTION.cursor().execute('DROP TABLE IF EXISTS %s;' % name)
 		RABA_CONNECTION.commit()
 		
 		TYPES.remove(name)	

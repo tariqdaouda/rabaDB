@@ -118,12 +118,12 @@ class RabaCollection(list) :
 		list.__setitem__(self, k, v)
 
 #print RabaCollection( (Raba(),Raba(), 3) )
-rc = RabaCollection( (Raba(),Raba()) )
-rc.append(Raba())
-rc.extend( set([Raba()]) )
-print rc
-rc.insert(0, Raba())
-print rc.pop()
+#rc = RabaCollection( (Raba(),Raba()) )
+#rc.append(Raba())
+#rc.extend( set([Raba()]) )
+#print rc
+#rc.insert(0, Raba())
+#print rc.pop()
 #rc.append('3')
 #rc[0] = '3'
 #print rc
@@ -137,3 +137,9 @@ print rc.pop()
 #print b, b.f, b.__class__, b.op()
 #print b.map
 #b.op()
+
+def a(*argv, **argk) :
+	print argv
+	print argk
+
+a(1, 2, 3, rt = 1, rp = 2)
