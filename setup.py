@@ -1,100 +1,94 @@
 import sqlite3 as sq
 import os
 
-RABA_CONNECTION = None
-TYPES = None
+class Singleton(type):
+	_instances = {}
+	def __call__(cls, *args, **kwargs):
+		if cls not in cls._instances:
+			cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+		return cls._instances[cls]
 
-def tableExits(name) :
-	global RABA_CONNECTION
-	sql = "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
-	return RABA_CONNECTION.cursor().execute(sql, (name, )).fetchone() != None
+class RabaConnection :
+	__metaclass__ = Singleton
+	def __init__(self, dbFileName = '/u/daoudat/usr/lib/python/rabaDB/rabaDB-0.db') :
+		self.connection = sq.connect(dbFileName)
+		
+		cur = self.connection.cursor()
+		sql = "SELECT name FROM sqlite_master WHERE type='table'"
+		cur.execute(sql)
+		self.tables = set()
+		for n in cur :
+			self.tables.add(n[0])
 	
-#def init(rabaDBStorage = 'rabaDB') :
-#	if not os.path.exists(rabaDBStorage) :
-#		print "raba storage path %s not found, creating it..." % rabaDBStorage
-#		os.makedirs(rabaDBStorage)
-	
-def connect(dbFileName = '/u/daoudat/usr/lib/python/rabaDB/rabaDB-0.db') :
-	global RABA_CONNECTION
-	RABA_CONNECTION = sq.connect(dbFileName)
-	
-	if not tableExits('Relations') :
-		print "table Relations not found, creating it..."
-		sql = 'CREATE TABLE Relations (id INTEGER PRIMARY KEY AUTOINCREMENT);'
-		RABA_CONNECTION.cursor().execute(sql)
-		RABA_CONNECTION.commit()
+	def __getattr__(self, name):
+		return self.connection.__getattribute__(name)
+		
+	def tableExits(self, name) :
+		return name in self.tables
 
-	return RABA_CONNECTION
+	def dropTable(self, name) :
+		sql = "DROP TABLE IF EXISTS %s" % name
+		self.connection.cursor().execute(sql)
+		self.connection.commit()
+		
+RabaConnection()
+
+"""
+class MasterTable(object) :
+	"This class is a singleton and manages the MasterTable "
+	__metaclass__ = Singleton
+
+	def __init__(self, dbFileName = '/u/daoudat/usr/lib/python/rabaDB/rabaDB-0.db') :
+		self.connection = sq.connect(dbFileName)
+
+		if not self.tableExits('MasterTable') :
+			print "table MasterTable not found, creating it..."
+			sql = 'CREATE TABLE MasterTable (id INTEGER PRIMARY KEY AUTOINCREMENT);'
+			self.connection.cursor().execute(sql)
+			self.connection.commit()
 	
-def setTypes() :
-	global TYPES
-	global RABA_CONNECTION
-	TYPES = set()
-	cur = RABA_CONNECTION.cursor()
-	cur.execute('PRAGMA table_info(relations);')
-	for c in cur :
-		TYPES.add(c[1])
-	return TYPES
+		self.setTypes()
 	
-def hasType(name) :
-	global TYPES
-	return name in TYPES
+	def cursor(self) :
+		return self.connection.cursor()
+		
+	def tableExits(self, name) :
+		sql = "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
+		return self.connection.cursor().execute(sql, (name, )).fetchone() != None
 	
-def updateType(name, fields) :
-	global TYPES
-	if not hasType(name) :
-		try :
-			sql = 'ALTER TABLE Relations ADD %s;' % name
-			RABA_CONNECTION.cursor().execute(sql)
-			RABA_CONNECTION.commit()
-		except sq.OperationalError as e :
-			pass
-			#if not e.message.startswith('duplicate column') :
-			#	raise e
-	
-		sql = 'CREATE TABLE %s (id INTEGER PRIMARY KEY AUTOINCREMENT, %s);' % (name, ', '.join(list(fields)))
-		RABA_CONNECTION.cursor().execute(sql)
-		RABA_CONNECTION.commit()
-		TYPES.add(name)
-	else :
-		cur = RABA_CONNECTION.cursor()
-		cur.execute('PRAGMA table_info(%s)' % name)
-		cols = set()
+	def setTypes(self) :
+		self.types = set()
+		cur = self.connection.cursor()
+		cur.execute('PRAGMA table_info(relations);')
 		for c in cur :
-			cols.add(c[1])
-		cols.remove('id')
-		
-		ff = set(fields)
-		addFields = ff.difference(cols)
-		remFields = cols.difference(ff)
-		
-		sql = ''
-		values = []
-		for f in addFields :
-			cur.execute('ALTER TABLE %s ADD %s;' % (name, f))
-		
-		for f in remFields :
-			cur.execute('UPDATE %s SET %s=NULL WHERE 1;' % (name, f))
-		
-		RABA_CONNECTION.commit()
+			self.types.add(c[1])
 	
-def removeType(name) :
-	"""Removes a type. SQLite doesn't support the drop of columns, this simply puts NULL in all
-	the values corresponding to the type in Relations Table and drops the table associated with"""
-	global TYPES
-	if hasType(name) :
-		RABA_CONNECTION.cursor().execute('UPDATE Relations SET %s=NULL WHERE 1;' % name)
-		RABA_CONNECTION.cursor().execute('DROP TABLE IF EXISTS %s;' % name)
-		RABA_CONNECTION.commit()
+	def hasType(self, name) :
+		return name in self.types
+
+	def updateType(self, name, fields) :
+		if not self.hasType(name) :
+			sql = 'ALTER TABLE Relations ADD %s;' % name
+			self.connection.cursor().execute(sql)
+			self.connection.commit()
 		
-		TYPES.remove(name)	
-
-def autoclean() :
-	"""TODO: Copies the Relations table into a new one removing all the collumns that have all their values to NULL
-	and drop the tables that correspond to these tables"""
-	#TODO
-	pass
-
-
-RABA_CONNECTION = connect()
-setTypes()
+			self.connection.cursor().execute(sql)
+			sql = 'CREATE TABLE %s (id INTEGER PRIMARY KEY AUTOINCREMENT, %s)' % (name, ', '.join(list(fields)))
+			self.connection.cursor().execute(sql)
+			self.connection.commit()
+			self.types.add(name)
+	
+	def removeType(self, name) :
+		if hasType(name) :
+			self.connection.cursor().execute('UPDATE Relations SET %s=NULL WHERE 1;' % name)
+			self.connection.cursor().execute('DROP TABLE IF EXISTS %s;' % name)
+			self.connection.commit()
+		
+		self.types.remove(name)	
+	
+	def autoclean(self) :
+		"TODO: Copies the Relations table into a new one removing all the collumns that have all their values to NULL
+		and drop the tables that correspond to these tables"
+		#TODO
+		pass
+"""
