@@ -1,19 +1,10 @@
 import sqlite3 as sq
-import os, types
+import os, types, cPickle
 from setup import RabaConnection
-
-#TODO
-#TYPES doivent d'abord dependre des sous class de RABA
-#si non present create table, si table mais non present drop table
-#
-#updateType dois s'occuper juste de la table relation, les table des types doient etre gere par Raba
-#
-#La metaclass n'a pas acces au fields self pour creer la table du type. Ajouter les champs suplementaire au save du Raba
-#
-#Rabalistes
 
 
 def getClassTYPES() :
+	"Returns the sub classes of Raba that have been imported. Warning if classes have not been imported, there's no way for python to know about them"
 	types = set()
 	for c in Raba.__subclasses__() :
 		types.add(c.__name__)
@@ -66,7 +57,7 @@ class _Raba_MetaClass(type) :
 			else :
 				sql = 'CREATE TABLE %s (%s)' % (name, idStr)
 			
-			print sql
+			#print sql
 			con.cursor().execute(sql)
 			con.connection.commit()
 			
@@ -87,21 +78,25 @@ class RabaPupa(object) :
 	on your python code. This approach ensures a higher degree of stability by preventing old objects from lurking inside the DB before popping out of nowhere several decades afterwards. 
 	According to this apparoach, raba objects are not serialised but transformed into pupas before being stored. A pupa is a very light object that contains only a reference
 	to the raba object class, and it's unique id. Upon asking for one of the attributes of a pupa, it magically transforms into a full fledged raba object. This process is completly transparent to the user. Pupas also have the advantage of being light weight and also ensure that the only raba objects loaded are those explicitely accessed, thus potentialy saving a lot of memory.
+	For a pupa self._rabaClass refers to the class of the object "inside" the pupa.
 	"""
-	_rabaType = True
 	_rabaClass = True
 	
 	def __init__(self, classObj, uniqueId) :
+		self._rabaClass = classObj
 		self.classObj = classObj
 		self.uniqueId = uniqueId
 	
-	def __getattribute__(self,name) :
+	def __getattribute__(self, name) :
 		def getAttr(name) :
 			return object.__getattribute__(self, name)
 			
 		def setAttr(name, value) :
 			object.__setattr__(self, name, value)
 	
+		if name  == '__class__' :
+			return object.__getattribute__(self, name)
+		
 		setAttr('__class__', getAttr('classObj'))
 		Raba.__init__(self, getAttr('uniqueId'))
 		
@@ -110,11 +105,12 @@ class RabaPupa(object) :
 class Raba(object):
 	
 	__metaclass__ = _Raba_MetaClass
-	_rabaType = True
 	_rabaClass = True
 	
 	def __init__(self, uniqueId = None) :
 		"All raba object must inherit from this class. If the class has no attribute id, an autoincrement field id will be created"
+		
+		self._rabaClass = self.__class__
 		
 		if self.__class__ == Raba :
 			raise TypeError('Raba class should never be instanciated, use inheritance')
@@ -132,8 +128,10 @@ class Raba(object):
 		
 		self.connection.commit()
 		
+		self._idIsSet = False
 		if uniqueId != None :
 			self.id = uniqueId
+			self._idIsSet = True
 			sql = ('SELECT * FROM %s WHERE id = ?' % self.__class__.__name__)
 			cur = self.connection.cursor()
 			res = cur.execute(sql, (uniqueId, )).fetchone()
@@ -148,13 +146,13 @@ class Raba(object):
 						elif isRabaList(elmt) :
 							print "loading rabalist not available yet"
 							#self.__setattr__(columns[i], RabaListPupa(self.columns[i]#, res[0][i])
-						elif elmt.__class__ == RabaType :
+						elif isRabaType(elmt) :
 							if not isinstance(res[i], types.NoneType) :
-								print 'loading', RabaPupa(self.columns[i], res[i])
 								self.__setattr__(self.columns[i], RabaPupa(elmt.classObj, res[i]))
 						else :
-							print "loading serialisation not available yet", self.columns[i], res[i]
-							#self.__setattr__(columns[i], LOAD SERIALISATIOn)
+							if res[i] != None :
+								self.__setattr__(self.columns[i], cPickle.loads(str(res[i])))
+							
 			else :
 				self._newEntry = True
 				
@@ -195,12 +193,12 @@ class Raba(object):
 					values.append(val.id)
 				elif isPrimitiveType(val) :
 					values.append(val)
-				elif val.__class__ == RabaType :
+				elif isRabaType(val) :
 					#A raba type that has not been instanciated
 					values.append(None)
 				else :
-					#serialise
-					pass
+					#serialize
+					values.append(buffer(cPickle.dumps(val)))
 					
 		if len(values) > 0 :
 			if self._newEntry :
@@ -211,13 +209,13 @@ class Raba(object):
 					sql = 'INSERT INTO %s (%s) VALUES (%s)' % (self.__class__.__name__, ','.join(fields), ','.join(questionMarks))
 					cur.execute(sql, values)
 					self.id = cur.lastrowid
+					self._idIsSet = True
 				else :
 					fields.append('id')
 					values.append(self.id)
 					for i in range(len(values)) :
 						questionMarks.append('?')
 					sql = 'INSERT INTO %s (%s) VALUES (%s)' % (self.__class__.__name__, ','.join(fields), ','.join(questionMarks))
-					#print sql, values, self.__class__.id.__class__, Autoincrement
 					cur.execute(sql, values)
 			else :
 				sql = 'UPDATE %s SET %s = ? WHERE id = ?' % (self.__class__.__name__, ' = ?, '.join(fields))
@@ -229,9 +227,12 @@ class Raba(object):
 		self.connection.commit()
 
 	def __setattr__(self, k, v) :
-		if hasattr(self.__class__, k) and isRabaType(getattr(self.__class__, k)) and not isRabaType(v):
-			raise TypeError("I'm sorry i but you can't replace a raba type by someting else")
-		object.__setattr__(self, k, v)
+		if k == 'id' and self._idIsSet :
+			raise KeyError("You cannot change the id once it has been set.")
+		elif hasattr(self.__class__, k) and isRabaType(getattr(self.__class__, k)) and not isRabaClass(v) :
+			raise TypeError("I'm sorry but you can't replace a raba type by someting else (%s: from %s to %s)" %(k, getattr(self.__class__, k), v))
+		else :
+			object.__setattr__(self, k, v)
 		
 	def __getitem__(self, k) :
 		return self.__getattribute__(k)
@@ -244,19 +245,19 @@ class Raba(object):
 
 class Gene(Raba) :
 	name = ''
-	id = Autoincrement()
+	id = None#Autoincrement()
 	def __init__(self, name, uniqueId = None) :
 		Raba.__init__(self, uniqueId)
 		self.name = name
 	
 class Chromosome(Raba) :
 	#genes = RabaObjectList()
-	name = 'symb'
-	x2 = 100
-	x1 = 10
+	name = None
+	x2 = None
+	x1 = None
 	gene = RabaType(Gene)
-	id = ''
-	
+	id = None
+	alist = []
 	def __init__(self, uniqueId = None) :
 		Raba.__init__(self, uniqueId)
 
@@ -265,7 +266,9 @@ if __name__ == '__main__' :
 	#RabaConnection().dropTable('Chromosome')
 	print "now testing raba types, raba lits later"
 	c = Chromosome('22')
-	c.gene = Gene('TPST898')
 	c.x1 = 33
 	c.x2 = 5656
+	print c.gene.name
+	c.gene = Gene('TPST9998', uniqueId = 1)
+	print c.alist# = range(10)
 	c.save()

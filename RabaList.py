@@ -1,17 +1,7 @@
 import sqlite3 as sq
 import os, types
 import setup as conf
-
-#TODO
-#TYPES doivent d'abord dependre des sous class de RABA
-#si non present create table, si table mais non present drop table
-#
-#updateType dois s'occuper juste de la table relation, les table des types doient etre gere par Raba
-#
-#La metaclass n'a pas acces au fields self pour creer la table du type. Ajouter les champs suplementaire au save du Raba
-#
-#Rabalistes
-
+from Raba import *
 
 class RabaListPupa(object) :
 	
@@ -37,10 +27,10 @@ class RabaList(list) :
 	tables that contain only one single line"""
 	
 	def _checkElmt(self, v) :
-		if not _isRabaType(v) :
+		if not _isRabaClass(v) :
 			return False
 			
-		if len(self) > 0 and v.__class__ != self[0].__class__ and (v.__class__ != RabaPupa or v.elmtsClassObj != self[0].__class__) :
+		if len(self) > 0 and v._rabaClass != self[0]._rabaClass and (v._rabaClass != RabaPupa or v.elmtsClassObj != self[0]._rabaClass) :
 			return False
 		
 		return True
@@ -62,15 +52,14 @@ class RabaList(list) :
 			self._dieInvalidRaba(check[1])
 			
 		try :
-			self.elmtsClassObj = argk['elmtsClassObj']
-			tableName = self._makeTableName(argk['relationName'], argk['anchorObj'])
+			tableName = RabaList._makeTableName(argk['relationName'], argk['elmtsClassObj'], argk['anchorObj']._rabaClass)
 			cur = RABA_CONNECTION.cursor()
 			cur.execute('SELECT * FROM %s' % tableName)
 			for aidi in cur :
-				self.append(RabaPupa(self.elmtsClassObj, aidi[0]))
+				self.append(RabaPupa(argk['elmtsClassObj'], aidi[0]))
 				
 		except KeyError:
-			self.elmtsClassObj = None
+			pass
 			
 	def extend(self, v) :
 		check = self._checkRabaList(v)
@@ -96,7 +85,7 @@ class RabaList(list) :
 	def _save(self, relationName , anchorObj) :
 		"""saves the RabaList into it's own table. This a private function that should be called directly"""
 		if len(self) > 0 :
-			tableName = self._makeTableName(relationName , anchorObj)
+			tableName = RabaList._makeTableName(relationName, self[0]._rabaClass , anchorObj_rabaClass)
 		
 			cur = conf.RABA_CONNECTION.cursor()
 			cur.execute('DROP TABLE IF EXITS %s' % tableName)
@@ -104,14 +93,32 @@ class RabaList(list) :
 			values = []
 			for e in self :
 				values.append((e.id, ))
-			cur.executemany('INSET INTO %s (id) VALUES (?)' % tableName, values)
+			cur.executemany('INSERT INTO %s (id) VALUES (?)' % tableName, values)
 			RABA_CONNECTION.commit()
 
-	def _makeTableName(self, relationName , anchorObj) :
+	def _makeTableName(relationName, elmtsRabaClass, anchorObjRabaClass) :
 		"#ex: RabaList_non-synsnps(snps)_of_gene_ENSG"
-		return 'RabaList_%s(%s)_of_%s_%s' % (relationName, self.elmtsClass, anchorObj.__class__.__name__, anchorObj.id)
+		return 'RabaList_%s(%s)_of_%s_%s' % (relationName, elmtsRabaClass, anchorObjRabaClass.__class__.__name__, anchorObj.id)
 		
 	def __setitem__(self, k, v) :
 		if self._checkElmt(v) :
 			self._dieInvalidRaba(v)
 		list.__setitem__(self, k, v)
+
+if __name__ == '__main__' :
+	class Gene(Raba) :
+		id = None
+		name = "TPST2"
+		def __init__(self, name, uniqueId = None) :
+			self.name = name
+			Raba.__init__(self, uniqueId)
+		
+	class Vache(Raba) :
+		id = None
+		genes = Rabalist()
+		def __init__(self, uniqueId = None) :
+			Raba.__init__(self, uniqueId)
+
+v = Vache()
+v.genes.append(Gene('sss'))
+	
