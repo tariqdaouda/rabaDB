@@ -84,9 +84,9 @@ class RabaPupa(object) :
 	
 	def __init__(self, classObj, uniqueId) :
 		self._rabaClass = classObj
-		self.classObj = classObj
-		self.uniqueId = uniqueId
-	
+		self.id = uniqueId
+		self.bypassMutationAttr = ['_rabaClass', 'id', '__class__']
+		
 	def __getattribute__(self, name) :
 		def getAttr(name) :
 			return object.__getattribute__(self, name)
@@ -94,11 +94,11 @@ class RabaPupa(object) :
 		def setAttr(name, value) :
 			object.__setattr__(self, name, value)
 	
-		if name  == '__class__' :
+		if name in getAttr('bypassMutationAttr'):
 			return object.__getattribute__(self, name)
-		
-		setAttr('__class__', getAttr('classObj'))
-		Raba.__init__(self, getAttr('uniqueId'))
+			
+		setAttr('__class__', getAttr('_rabaClass'))
+		Raba.__init__(self, getAttr('id'))
 		
 		return object.__getattribute__(self, name)
 	
@@ -146,13 +146,14 @@ class Raba(object):
 						elmt = getattr(self.__class__, self.columns[i])
 						if isPrimitiveType(elmt) :
 							self.__setattr__(self.columns[i], res[i])
-						elif isRabaList(elmt) :
-							li = RabaList(relationName = self.columns[i], anchorObj = self)
+						#elif isRabaList(elmt) :
+							#li = RabaList(relationName = self.columns[i], anchorObj = self)
 							#print "loading rabalist not available yet"
 							#self.__setattr__(columns[i], RabaListPupa(self.columns[i]#, res[0][i])
 						elif isRabaType(elmt) :
 							if not isinstance(res[i], types.NoneType) :
-								self.__setattr__(self.columns[i], RabaPupa(elmt.classObj, res[i]))
+								li = RabaList(indexedClass = elmt.classObj, relationName = self.columns[i], anchorObj = self)
+								self.__setattr__(self.columns[i], li)
 						else :
 							if res[i] != None :
 								self.__setattr__(self.columns[i], cPickle.loads(str(res[i])))
@@ -193,14 +194,14 @@ class Raba(object):
 					self.connection.cursor().execute(sql)
 				
 				fields.append(k)
-				if isRabaClass(val) :
-					val.save()
-					values.append(val.id)
-				elif isPrimitiveType(val) :
+				#if isRabaClass(val) :
+				#	val.save()
+				#	values.append(val.id)
+				#elif isRabaType(val) :
+				#	A raba type that has not been instanciated
+				#	values.append(None)
+				if isPrimitiveType(val) :
 					values.append(val)
-				elif isRabaType(val) :
-					#A raba type that has not been instanciated
-					values.append(None)
 				elif isRabaList(val) :
 					rabalists.append((k, val))
 					values.append('~rabalist~')
@@ -244,11 +245,14 @@ class Raba(object):
 	def __setattr__(self, k, v) :
 		if k == 'id' and self._idIsSet :
 			raise KeyError("You cannot change the id once it has been set.")
-		elif hasattr(self.__class__, k) and isRabaType(getattr(self.__class__, k)) and not isRabaClass(v) :
+		elif hasattr(self.__class__, k) and isRabaType(getattr(self.__class__, k)) and not isRabaList(v) : #and not isRabaClass(v) 
 			raise TypeError("I'm sorry but you can't replace a raba type by someting else (%s: from %s to %s)" %(k, getattr(self.__class__, k), v))
 		else :
 			object.__setattr__(self, k, v)
-		
+	
+	def __getattribute__(self, k) :
+		print "transform rabatype into pupalits"
+		 
 	def __getitem__(self, k) :
 		return self.__getattribute__(k)
 
@@ -263,10 +267,10 @@ class Raba(object):
 	
 class RabaListPupa(object) :
 	
-	def __init__(self, relationName, anchorObj, elmtsClassObj) :
+	def __init__(self, indexedClass, relationName, anchorObj) :
 		self.relationName = relationName
 		self.anchorObj = anchorObj
-		self.elmtsClassObj = elmtsClassObj
+		self.indexedClass = indexedClass
 	
 	def __getattribute__(self,name) :
 		def getAttr(name) :
@@ -276,7 +280,7 @@ class RabaListPupa(object) :
 			object.__setattr__(self, name, value)
 	
 		setAttr('__class__', getAttr('classObj'))
-		RabaList.__init__(self, getAttr('relationName'), getAttr('anchorObj'), getAttr('elmtsClassObj'))
+		RabaList.__init__(self, getAttr('relationName'), getAttr('anchorObj'), getAttr('indexedClass'))
 		
 		return object.__getattribute__(self, name)
 
@@ -288,7 +292,7 @@ class RabaList(list) :
 		if not isRabaClass(v) :
 			return False
 			
-		if len(self) > 0 and v._rabaClass != self[0]._rabaClass and (v._rabaClass != RabaPupa or v.elmtsClassObj != self[0]._rabaClass) :
+		if len(self) > 0 and v._rabaClass != self[0]._rabaClass :
 			return False
 		
 		return True
@@ -304,7 +308,6 @@ class RabaList(list) :
 		raise TypeError('Only Raba objects of the same class can be stored in RabaLists. Elmt: %s is not a valid RabaObject' % v)
 			
 	def __init__(self, *argv, **argk) :
-		print argv, 'aa'
 		list.__init__(self, *argv)
 		check = self._checkRabaList(self)
 		if not check[0]:
@@ -314,9 +317,9 @@ class RabaList(list) :
 		try :
 			tableName = self._makeTableName(argk['indexedClass'], argk['relationName'], argk['anchorObj'])
 			cur = self.connection.cursor()
-			cur.execute('SELECT * FROM %s' % tableName)
+			cur.execute('SELECT * FROM %s WHERE 1;' % tableName)
 			for aidi in cur :
-				self.append(RabaPupa(argk['elmtsClassObj'], aidi[0]))
+				self.append(RabaPupa(argk['indexedClass'], aidi[0]))
 				
 		except KeyError:
 			pass
@@ -345,7 +348,7 @@ class RabaList(list) :
 	def _save(self, relationName , anchorObj) :
 		"""saves the RabaList into it's own table. This a private function that should be called directly"""
 		if len(self) > 0 :
-			tableName = self._makeTableName(relationName, anchorObj)
+			tableName = self._makeTableName(self[0].__class__, relationName, anchorObj)
 		
 			cur = self.connection.cursor()
 			cur.execute('DROP TABLE IF EXISTS %s' % tableName)
@@ -354,20 +357,20 @@ class RabaList(list) :
 			for e in self :
 				e.save()
 				values.append((e.id, ))
-			print values
+			
 			cur.executemany('INSERT INTO %s (id) VALUES (?)' % tableName, values)
 			self.connection.commit()
 
 	def _makeTableName(self, indexedClass, relationName, anchorObj) :
-		if len(self) > 0 :
-			return 'RabaList_%s_of_%s_BelongsTo_%s_id_%s' % (relationName, indexedClass.__name__, anchorObj.__class__.__name__, anchorObj.id)
-		raise ValueError("Can't create a table name for a RabaList without elements")
-		
+		return 'RabaList_%s_of_%s_BelongsTo_%s_id_%s' % (relationName, indexedClass.__name__, anchorObj.__class__.__name__, anchorObj.id)
+	
 	def __setitem__(self, k, v) :
 		if self._checkElmt(v) :
 			self._dieInvalidRaba(v)
 		list.__setitem__(self, k, v)
 
+	def __repr__(self) :
+		return '<RL'+list.__repr__(self)+'>'
 """
 class Gene(Raba) :
 	name = ''
@@ -400,6 +403,8 @@ if __name__ == '__main__' :
 	c.save()
 """
 if __name__ == '__main__' :
+	#RabaConnection().dropTable('Gene')
+	#RabaConnection().dropTable('vache')
 	class Gene(Raba) :
 		id = Autoincrement
 		name = "TPST2"
@@ -409,12 +414,14 @@ if __name__ == '__main__' :
 		
 	class Vache(Raba) :
 		id = None
-		genes = RabaList()
+		genes = RabaType(Gene)
 		def __init__(self, uniqueId = None) :
 			Raba.__init__(self, uniqueId)
 
 v = Vache("vache1")
-v.genes.append(Gene('sss'))
-v.genes.append(Gene('sss'))
 print v.genes
-v.save()
+v.genes.append(Gene('sss'))
+v.genes.append(Gene('sss'))
+print v.genes[0].name
+print v.genes
+#v.save()
