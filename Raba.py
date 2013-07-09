@@ -11,8 +11,7 @@ def getClassTYPES() :
 	return types
 
 def isRabaList(e) :
-	return False
-	#return e.__class__ == RabaList
+	return e.__class__ == RabaList
 
 def isRabaType(v) :
 	return hasattr(v, '__class__') and hasattr(v.__class__, '_rabaType') and v.__class__._rabaType == True
@@ -28,7 +27,8 @@ def isPrimitiveType(v) :
 	return False
 
 class Autoincrement :
-	pass
+	def __new__(cls, name, bases, dct) :
+		return cls
 
 class _Raba_MetaClass(type) :
 	def __new__(cls, name, bases, dct) :		
@@ -37,8 +37,8 @@ class _Raba_MetaClass(type) :
 		
 		if 'id' not in dct :
 			dct['id'] = Autoincrement
-		elif dct['id'].__class__ == Autoincrement :
-			dct['id'] = Autoincrement
+		#elif dct['id'].__class__ == Autoincrement :
+		#	dct['id'] = Autoincrement
 			
 		for k, v in dct.items():
 			if k[0] != '_' and k != 'id' :
@@ -101,7 +101,10 @@ class RabaPupa(object) :
 		Raba.__init__(self, getAttr('uniqueId'))
 		
 		return object.__getattribute__(self, name)
-		
+	
+	def __repr__(self) :
+		return "<Raba pupa: %s, id %s>" % (self._rabaClass.__name__, self.id)
+
 class Raba(object):
 	
 	__metaclass__ = _Raba_MetaClass
@@ -144,7 +147,8 @@ class Raba(object):
 						if isPrimitiveType(elmt) :
 							self.__setattr__(self.columns[i], res[i])
 						elif isRabaList(elmt) :
-							print "loading rabalist not available yet"
+							li = RabaList(relationName = self.columns[i], anchorObj = self)
+							#print "loading rabalist not available yet"
 							#self.__setattr__(columns[i], RabaListPupa(self.columns[i]#, res[0][i])
 						elif isRabaType(elmt) :
 							if not isinstance(res[i], types.NoneType) :
@@ -175,6 +179,7 @@ class Raba(object):
 	def save(self) :
 		fields = []
 		values = []
+		rabalists = []
 		cur = self.connection.cursor()
 		for k, v in self.__class__.__dict__.items() :
 			if k in self.__dict__ :
@@ -196,6 +201,9 @@ class Raba(object):
 				elif isRabaType(val) :
 					#A raba type that has not been instanciated
 					values.append(None)
+				elif isRabaList(val) :
+					rabalists.append((k, val))
+					values.append('~rabalist~')
 				else :
 					#serialize
 					values.append(buffer(cPickle.dumps(val)))
@@ -211,6 +219,10 @@ class Raba(object):
 					self.id = cur.lastrowid
 					self._idIsSet = True
 				else :
+					
+					if self.id == None or self.id == '' :
+						raise ValueError("I can't save a RabaObject (%s) whose id value is None or ''" % self)
+					
 					fields.append('id')
 					values.append(self.id)
 					for i in range(len(values)) :
@@ -223,6 +235,9 @@ class Raba(object):
 				cur.execute(sql, values)
 		else :
 			raise ValueError('class %s has no fields to save' % self.__class__.__name__)
+		
+		for relation, l in rabalists :
+			l._save(relation, self)
 			
 		self.connection.commit()
 
@@ -242,7 +257,118 @@ class Raba(object):
 
 	def __hash__(self) :
 		return self.__class__.__name__+str(self.uniqueId)
+	
+	def __repr__(self) :
+		return "<Raba obj: %s, id %s>" % (self._rabaClass.__name__, self.id)
+	
+class RabaListPupa(object) :
+	
+	def __init__(self, relationName, anchorObj, elmtsClassObj) :
+		self.relationName = relationName
+		self.anchorObj = anchorObj
+		self.elmtsClassObj = elmtsClassObj
+	
+	def __getattribute__(self,name) :
+		def getAttr(name) :
+			return object.__getattribute__(self, name)
+			
+		def setAttr(name, value) :
+			object.__setattr__(self, name, value)
+	
+		setAttr('__class__', getAttr('classObj'))
+		RabaList.__init__(self, getAttr('relationName'), getAttr('anchorObj'), getAttr('elmtsClassObj'))
+		
+		return object.__getattribute__(self, name)
 
+class RabaList(list) :
+	"""A RabaList is a list that can only contain Raba objects of the same class or (Pupas of the same class). They represent one to many relations and are stored in separate
+	tables that contain only one single line"""
+	
+	def _checkElmt(self, v) :
+		if not isRabaClass(v) :
+			return False
+			
+		if len(self) > 0 and v._rabaClass != self[0]._rabaClass and (v._rabaClass != RabaPupa or v.elmtsClassObj != self[0]._rabaClass) :
+			return False
+		
+		return True
+		
+	def _checkRabaList(self, v) :
+		vv = list(v)
+		for e in vv :
+			if not self._checkElmt(e) :
+				return (False, e)
+		return (True, None)
+	
+	def _dieInvalidRaba(self, v) :
+		raise TypeError('Only Raba objects of the same class can be stored in RabaLists. Elmt: %s is not a valid RabaObject' % v)
+			
+	def __init__(self, *argv, **argk) :
+		print argv, 'aa'
+		list.__init__(self, *argv)
+		check = self._checkRabaList(self)
+		if not check[0]:
+			self._dieInvalidRaba(check[1])
+		
+		self.connection = RabaConnection()
+		try :
+			tableName = self._makeTableName(argk['indexedClass'], argk['relationName'], argk['anchorObj'])
+			cur = self.connection.cursor()
+			cur.execute('SELECT * FROM %s' % tableName)
+			for aidi in cur :
+				self.append(RabaPupa(argk['elmtsClassObj'], aidi[0]))
+				
+		except KeyError:
+			pass
+			
+	def extend(self, v) :
+		check = self._checkRabaList(v)
+		if not check[0]:
+			self._dieInvalidRaba(check[1])
+		list.extend(self, v)			
+	
+	def append(self, v) :
+		if not self._checkElmt(v) :
+			self._dieInvalidRaba(v)
+		list.append(self, v)
+
+	def insert(self, k, v) :
+		if not self._checkElmt(v) :
+			self._dieInvalidRaba(v)
+		list.insert(self, k, v)
+	
+	def pupatizeElements(self) :
+		"""Transform all raba object into pupas"""
+		for i in range(len(self)) :
+			self[i] = self[i].pupa()
+
+	def _save(self, relationName , anchorObj) :
+		"""saves the RabaList into it's own table. This a private function that should be called directly"""
+		if len(self) > 0 :
+			tableName = self._makeTableName(relationName, anchorObj)
+		
+			cur = self.connection.cursor()
+			cur.execute('DROP TABLE IF EXISTS %s' % tableName)
+			cur.execute('CREATE TABLE %s(id)' % tableName)
+			values = []
+			for e in self :
+				e.save()
+				values.append((e.id, ))
+			print values
+			cur.executemany('INSERT INTO %s (id) VALUES (?)' % tableName, values)
+			self.connection.commit()
+
+	def _makeTableName(self, indexedClass, relationName, anchorObj) :
+		if len(self) > 0 :
+			return 'RabaList_%s_of_%s_BelongsTo_%s_id_%s' % (relationName, indexedClass.__name__, anchorObj.__class__.__name__, anchorObj.id)
+		raise ValueError("Can't create a table name for a RabaList without elements")
+		
+	def __setitem__(self, k, v) :
+		if self._checkElmt(v) :
+			self._dieInvalidRaba(v)
+		list.__setitem__(self, k, v)
+
+"""
 class Gene(Raba) :
 	name = ''
 	id = None#Autoincrement()
@@ -272,3 +398,23 @@ if __name__ == '__main__' :
 	c.gene = Gene('TPST9998', uniqueId = 1)
 	print c.alist# = range(10)
 	c.save()
+"""
+if __name__ == '__main__' :
+	class Gene(Raba) :
+		id = Autoincrement
+		name = "TPST2"
+		def __init__(self, name, uniqueId = None) :
+			self.name = name
+			Raba.__init__(self, uniqueId)
+		
+	class Vache(Raba) :
+		id = None
+		genes = RabaList()
+		def __init__(self, uniqueId = None) :
+			Raba.__init__(self, uniqueId)
+
+v = Vache("vache1")
+v.genes.append(Gene('sss'))
+v.genes.append(Gene('sss'))
+print v.genes
+v.save()
