@@ -42,11 +42,11 @@ class _Raba_MetaClass(type) :
 			if k[0] != '_' and k != 'id' :
 				fields.append(k)
 		
-		if dct['id'] ==  Autoincrement :
+		if dct['id'] is Autoincrement :
 			idStr = 'id INTEGER PRIMARY KEY AUTOINCREMENT'
 		else :
 			idStr = 'id PRIMARY KEY'
-				
+		
 		con = RabaConnection()
 		
 		if name != 'Raba' and not con.tableExits(name) :
@@ -300,31 +300,15 @@ class RabaListPupa(list) :
 		
 	def __getattribute__(self, name) :
 
-		def getAttr(name) :
+		if name in list.__getattribute__(self, "bypassMutationAttr") :
 			return list.__getattribute__(self, name)
-			
-		def setAttr(name, value) :
-			list.__setattr__(self, name, value)
 		
-		if name in getAttr('bypassMutationAttr') :
-			return getAttr(name)
-			
-		setAttr('__class__', RabaList)
-		indexedC = getAttr('indexedClass')
-		relationN = getAttr('relationName')
-		anchorO = getAttr('anchorObj')
-		
-		purge = getAttr('__dict__').keys()
-		for k in purge :
-			delattr(self, k)
-			
-		RabaList.__init__(self, indexedClass = indexedC, relationName = relationN, anchorObj = anchorO)
-			
+		list.__getattribute__(self, "_morph")()
 		return list.__getattribute__(self, name)
 
 	def __repr__(self) :
 		return "<RLPupa relationName: %s, indexedClass: %s, anchorObj:%s>" % (self.relationName, self.indexedClass.__name__, self.anchorObj)
-		
+
 class RabaList(list) :
 	"""A RabaList is a list that can only contain Raba objects of the same class or (Pupas of the same class). They represent one to many relations and are stored in separate
 	tables that contain only one single line"""
@@ -364,7 +348,7 @@ class RabaList(list) :
 			for aidi in cur :
 				self.append(RabaPupa(argk['indexedClass'], aidi[0]))
 				
-		except KeyError:
+		except (KeyError, sq.OperationalError) :
 			pass
 			
 	def extend(self, v) :
@@ -391,23 +375,22 @@ class RabaList(list) :
 	def _save(self, relationName , anchorObj) :
 		"""saves the RabaList into it's own table. This a private function that should be called directly"""
 		if len(self) > 0 :
-			tableName = self._makeTableName(self[0].__class__, relationName, anchorObj)
+			tableName = self._makeTableName(self[0]._rabaClass, relationName, anchorObj)
 		
 			cur = self.connection.cursor()
 			cur.execute('DROP TABLE IF EXISTS %s' % tableName)
 			cur.execute('CREATE TABLE %s(id)' % tableName)
 			values = []
 			for e in self :
-				print 'lll', e.id
 				e.save()
 				values.append((e.id, ))
-			
+				
 			cur.executemany('INSERT INTO %s (id) VALUES (?)' % tableName, values)
 			self.connection.commit()
 
 	def _makeTableName(self, indexedClass, relationName, anchorObj) :
 		return 'RabaList_%s_of_%s_BelongsTo_%s_id_%s' % (relationName, indexedClass.__name__, anchorObj.__class__.__name__, anchorObj.id)
-	
+		
 	def __setitem__(self, k, v) :
 		if self._checkElmt(v) :
 			self._dieInvalidRaba(v)
@@ -415,58 +398,3 @@ class RabaList(list) :
 
 	def __repr__(self) :
 		return '<RL'+list.__repr__(self)+'>'
-"""
-class Gene(Raba) :
-	name = ''
-	id = None#Autoincrement()
-	def __init__(self, name, uniqueId = None) :
-		Raba.__init__(self, uniqueId)
-		self.name = name
-	
-class Chromosome(Raba) :
-	#genes = RabaObjectList()
-	name = None
-	x2 = None
-	x1 = None
-	gene = RabaType(Gene)
-	id = None
-	alist = []
-	def __init__(self, uniqueId = None) :
-		Raba.__init__(self, uniqueId)
-
-if __name__ == '__main__' :
-	#RabaConnection().dropTable('Gene')
-	#RabaConnection().dropTable('Chromosome')
-	print "now testing raba types, raba lits later"
-	c = Chromosome('22')
-	c.x1 = 33
-	c.x2 = 5656
-	print c.gene.name
-	c.gene = Gene('TPST9998', uniqueId = 1)
-	print c.alist# = range(10)
-	c.save()
-"""
-if __name__ == '__main__' :
-	#RabaConnection().dropTable('Gene')
-	#RabaConnection().dropTable('vache')
-	class Gene(Raba) :
-		id = Autoincrement
-		name = "TPST2"
-		def __init__(self, name, uniqueId = None) :
-			self.name = name
-			Raba.__init__(self, uniqueId)
-		
-	class Vache(Raba) :
-		id = None
-		genes = RabaType(Gene)
-		def __init__(self, uniqueId = None) :
-			Raba.__init__(self, uniqueId)
-
-	v = Vache("vache1")
-	#print dir(v)
-	print 'befor append', v.genes
-	#print v.genes[0]
-	#print
-	v.genes.append(Gene('sss'))
-	print 'after apped', v.genes
-	v.save()
