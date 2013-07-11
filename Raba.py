@@ -1,5 +1,5 @@
 import sqlite3 as sq
-import os, types, cPickle
+import os, types, cPickle, random
 from setup import RabaConnection
 
 
@@ -10,14 +10,14 @@ def getClassTYPES() :
 		types.add(c.__name__)
 	return types
 
-def isRabaList(e) :
-	return e.__class__ == RabaList
+def isRabaList(v) :
+	return hasattr(v, '__class__') and hasattr(v.__class__, '_isRabaList') and v.__class__._isRabaList
 
 def isRabaType(v) :
-	return hasattr(v, '__class__') and hasattr(v.__class__, '_rabaType') and v.__class__._rabaType == True
+	return hasattr(v, '__class__') and hasattr(v.__class__, '_isRabaType') and v.__class__._isRabaType
 
 def isRabaClass(v) :
-	return hasattr(v, '__class__') and hasattr(v.__class__, '_rabaClass') and v.__class__._rabaClass == True
+	return hasattr(v, '__class__') and hasattr(v.__class__, '_isRabaClass') and v.__class__._isRabaClass
 	
 def isPrimitiveType(v) :
 	primTypes = [types.IntType, types.LongType, types.FloatType, types.StringType, types.UnicodeType, types.BufferType, types.NoneType]
@@ -31,14 +31,12 @@ class Autoincrement :
 		return cls
 
 class _Raba_MetaClass(type) :
-	def __new__(cls, name, bases, dct) :		
+	def __new__(cls, name, bases, dct) :
 		fields = []
 		autoIncr = True
 		
 		if 'id' not in dct :
 			dct['id'] = Autoincrement
-		#elif dct['id'].__class__ == Autoincrement :
-		#	dct['id'] = Autoincrement
 			
 		for k, v in dct.items():
 			if k[0] != '_' and k != 'id' :
@@ -57,7 +55,6 @@ class _Raba_MetaClass(type) :
 			else :
 				sql = 'CREATE TABLE %s (%s)' % (name, idStr)
 			
-			#print sql
 			con.cursor().execute(sql)
 			con.connection.commit()
 			
@@ -65,7 +62,7 @@ class _Raba_MetaClass(type) :
 		return type.__new__(cls, name, bases, dct)
 
 class RabaType(object) :
-	_rabaType = True
+	_isRabaType = True
 	
 	def __init__(self, classObj) :
 		if not isRabaClass(classObj) :
@@ -80,13 +77,14 @@ class RabaPupa(object) :
 	to the raba object class, and it's unique id. Upon asking for one of the attributes of a pupa, it magically transforms into a full fledged raba object. This process is completly transparent to the user. Pupas also have the advantage of being light weight and also ensure that the only raba objects loaded are those explicitely accessed, thus potentialy saving a lot of memory.
 	For a pupa self._rabaClass refers to the class of the object "inside" the pupa.
 	"""
-	_rabaClass = True
-	
+	_isRabaClass = True
+
 	def __init__(self, classObj, uniqueId) :
 		self._rabaClass = classObj
 		self.id = uniqueId
-		self.bypassMutationAttr = ['_rabaClass', 'id', '__class__']
-		
+		self.__doc__ = classObj.__doc__
+		self.bypassMutationAttr = set(['_isRabaClass', '_rabaClass', 'id', '__class__', '__doc__'])
+			
 	def __getattribute__(self, name) :
 		def getAttr(name) :
 			return object.__getattribute__(self, name)
@@ -96,9 +94,15 @@ class RabaPupa(object) :
 	
 		if name in getAttr('bypassMutationAttr'):
 			return object.__getattribute__(self, name)
-			
+		
 		setAttr('__class__', getAttr('_rabaClass'))
-		Raba.__init__(self, getAttr('id'))
+		uniqueId = getAttr('id')
+		
+		purge = getAttr('__dict__').keys()
+		for k in purge :
+			delattr(self, k)
+			
+		Raba.__init__(self, uniqueId)
 		
 		return object.__getattribute__(self, name)
 	
@@ -106,17 +110,25 @@ class RabaPupa(object) :
 		return "<Raba pupa: %s, id %s>" % (self._rabaClass.__name__, self.id)
 
 class Raba(object):
-	
+	"All raba object must inherit from this class. If the class has no attribute id, an autoincrement field id will be created"	
 	__metaclass__ = _Raba_MetaClass
-	_rabaClass = True
+	_isRabaClass = True
 	
 	def __init__(self, uniqueId = None) :
-		"All raba object must inherit from this class. If the class has no attribute id, an autoincrement field id will be created"
-		
-		self._rabaClass = self.__class__
 		
 		if self.__class__ == Raba :
 			raise TypeError('Raba class should never be instanciated, use inheritance')
+
+		self._rabaClass = self.__class__
+			
+		self.id = uniqueId
+		if uniqueId != None and uniqueId != '' :
+			self._idIsSet = True
+		else :
+			self._idIsSet = False
+			
+		if  not  hasattr(self.__class__, 'id') :
+			setattr(self.__class__, 'id', Autoincrement)
 		
 		self.connection = RabaConnection()
 		self.columns = {}
@@ -131,14 +143,10 @@ class Raba(object):
 		
 		self.connection.commit()
 		
-		self._idIsSet = False
-		if uniqueId != None :
-			self.id = uniqueId
-			self._idIsSet = True
+		if self._idIsSet :
 			sql = ('SELECT * FROM %s WHERE id = ?' % self.__class__.__name__)
 			cur = self.connection.cursor()
 			res = cur.execute(sql, (uniqueId, )).fetchone()
-			
 			if res != None :
 				self._newEntry = False
 				for i in self.columns :
@@ -146,13 +154,9 @@ class Raba(object):
 						elmt = getattr(self.__class__, self.columns[i])
 						if isPrimitiveType(elmt) :
 							self.__setattr__(self.columns[i], res[i])
-						#elif isRabaList(elmt) :
-							#li = RabaList(relationName = self.columns[i], anchorObj = self)
-							#print "loading rabalist not available yet"
-							#self.__setattr__(columns[i], RabaListPupa(self.columns[i]#, res[0][i])
 						elif isRabaType(elmt) :
 							if not isinstance(res[i], types.NoneType) :
-								li = RabaList(indexedClass = elmt.classObj, relationName = self.columns[i], anchorObj = self)
+								li = RabaListPupa(indexedClass = elmt.classObj, relationName = self.columns[i], anchorObj = self)
 								self.__setattr__(self.columns[i], li)
 						else :
 							if res[i] != None :
@@ -160,12 +164,7 @@ class Raba(object):
 							
 			else :
 				self._newEntry = True
-				
-		elif hasattr(self.__class__, 'id') :
-			self.id = self.__class__.id
-			self._newEntry = True
 		else :
-			self.id = None
 			self._newEntry = True
 		
 	def autoclean(self) :
@@ -194,12 +193,6 @@ class Raba(object):
 					self.connection.cursor().execute(sql)
 				
 				fields.append(k)
-				#if isRabaClass(val) :
-				#	val.save()
-				#	values.append(val.id)
-				#elif isRabaType(val) :
-				#	A raba type that has not been instanciated
-				#	values.append(None)
 				if isPrimitiveType(val) :
 					values.append(val)
 				elif isRabaList(val) :
@@ -212,7 +205,7 @@ class Raba(object):
 		if len(values) > 0 :
 			if self._newEntry :
 				questionMarks = []
-				if self.__class__.id == Autoincrement :
+				if self.__class__.id is Autoincrement and not self._idIsSet :
 					for i in range(len(values)) :
 						questionMarks.append('?')
 					sql = 'INSERT INTO %s (%s) VALUES (%s)' % (self.__class__.__name__, ','.join(fields), ','.join(questionMarks))
@@ -243,16 +236,23 @@ class Raba(object):
 		self.connection.commit()
 
 	def __setattr__(self, k, v) :
-		if k == 'id' and self._idIsSet :
-			raise KeyError("You cannot change the id once it has been set.")
+		if k == 'id' and k in self.__dict__ and self.__dict__[k] != None :
+			raise KeyError("You cannot change the id once it has been set ( %s => %s, obj: %s)." % (self.id, v, self))
 		elif hasattr(self.__class__, k) and isRabaType(getattr(self.__class__, k)) and not isRabaList(v) : #and not isRabaClass(v) 
 			raise TypeError("I'm sorry but you can't replace a raba type by someting else (%s: from %s to %s)" %(k, getattr(self.__class__, k), v))
 		else :
 			object.__setattr__(self, k, v)
 	
 	def __getattribute__(self, k) :
-		print "transform rabatype into pupalits"
-		 
+		elmt = object.__getattribute__(self, k)
+		
+		#transform into a RabaListPupa
+		if isRabaType(elmt) :
+			elmt = RabaListPupa(indexedClass = elmt.classObj, relationName = k, anchorObj = self)
+			setattr(self, k, elmt)
+		
+		return elmt
+		
 	def __getitem__(self, k) :
 		return self.__getattribute__(k)
 
@@ -265,28 +265,71 @@ class Raba(object):
 	def __repr__(self) :
 		return "<Raba obj: %s, id %s>" % (self._rabaClass.__name__, self.id)
 	
-class RabaListPupa(object) :
+class RabaListPupa(list) :
+	_isRabaList = True
 	
 	def __init__(self, indexedClass, relationName, anchorObj) :
 		self.relationName = relationName
 		self.anchorObj = anchorObj
 		self.indexedClass = indexedClass
-	
-	def __getattribute__(self,name) :
+		self.bypassMutationAttr = set(['relationName', 'anchorObj', 'indexedClass', '__class__'])
+		
+	def _morph(self) :
 		def getAttr(name) :
-			return object.__getattribute__(self, name)
+			return list.__getattribute__(self, name)
 			
 		def setAttr(name, value) :
-			object.__setattr__(self, name, value)
-	
-		setAttr('__class__', getAttr('classObj'))
-		RabaList.__init__(self, getAttr('relationName'), getAttr('anchorObj'), getAttr('indexedClass'))
+			list.__setattr__(self, name, value)
 		
-		return object.__getattribute__(self, name)
+		setAttr('__class__', RabaList)
+		
+		indC = getAttr('indexedClass')
+		relName = getAttr('relationName')
+		anchObj = getAttr('anchorObj')
+		
+		purge = getAttr('__dict__').keys()
+		for k in purge :
+			delattr(self, k)
+		
+		RabaList.__init__(self, indexedClass = indC, relationName = relName, anchorObj = anchObj)
+		
+	def __getitem__(self, k) :
+		self._morph()
+		#print 'll', self
+		return self[k]
+		
+	def __getattribute__(self, name) :
 
+		def getAttr(name) :
+			return list.__getattribute__(self, name)
+			
+		def setAttr(name, value) :
+			list.__setattr__(self, name, value)
+		
+		if name in getAttr('bypassMutationAttr') :
+			return getAttr(name)
+			
+		setAttr('__class__', RabaList)
+		indexedC = getAttr('indexedClass')
+		relationN = getAttr('relationName')
+		anchorO = getAttr('anchorObj')
+		
+		purge = getAttr('__dict__').keys()
+		for k in purge :
+			delattr(self, k)
+			
+		RabaList.__init__(self, indexedClass = indexedC, relationName = relationN, anchorObj = anchorO)
+			
+		return list.__getattribute__(self, name)
+
+	def __repr__(self) :
+		return "<RLPupa relationName: %s, indexedClass: %s, anchorObj:%s>" % (self.relationName, self.indexedClass.__name__, self.anchorObj)
+		
 class RabaList(list) :
 	"""A RabaList is a list that can only contain Raba objects of the same class or (Pupas of the same class). They represent one to many relations and are stored in separate
 	tables that contain only one single line"""
+	
+	_isRabaList = True
 	
 	def _checkElmt(self, v) :
 		if not isRabaClass(v) :
@@ -317,7 +360,7 @@ class RabaList(list) :
 		try :
 			tableName = self._makeTableName(argk['indexedClass'], argk['relationName'], argk['anchorObj'])
 			cur = self.connection.cursor()
-			cur.execute('SELECT * FROM %s WHERE 1;' % tableName)
+			cur.execute('SELECT * FROM %s WHERE 1' % tableName)
 			for aidi in cur :
 				self.append(RabaPupa(argk['indexedClass'], aidi[0]))
 				
@@ -355,6 +398,7 @@ class RabaList(list) :
 			cur.execute('CREATE TABLE %s(id)' % tableName)
 			values = []
 			for e in self :
+				print 'lll', e.id
 				e.save()
 				values.append((e.id, ))
 			
@@ -418,10 +462,11 @@ if __name__ == '__main__' :
 		def __init__(self, uniqueId = None) :
 			Raba.__init__(self, uniqueId)
 
-v = Vache("vache1")
-print v.genes
-v.genes.append(Gene('sss'))
-v.genes.append(Gene('sss'))
-print v.genes[0].name
-print v.genes
-#v.save()
+	v = Vache("vache1")
+	#print dir(v)
+	print 'befor append', v.genes
+	#print v.genes[0]
+	#print
+	v.genes.append(Gene('sss'))
+	print 'after apped', v.genes
+	v.save()
