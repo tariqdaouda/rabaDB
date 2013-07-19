@@ -66,7 +66,8 @@ class RabaType(object) :
 	
 	def __init__(self, classObj) :
 		if not isRabaClass(classObj) :
-			self.classObj = classObj
+			self._rabaClass = classObj
+			#self.classObj = classObj
 		else :
 			raise TypeError('%s is not a valid Raba type (subclass of raba)' % classObj)
 			
@@ -137,6 +138,8 @@ class Raba(object):
 		
 		for c in col.fetchall() :
 			if c[1] != 'id' and c[1] not in self.__class__.__dict__:
+				self.connection.dropTable('RL')
+				TODOdropTheTableOfTheRL
 				cur.execute('UPDATE %s SET %s=NULL WHERE 1;' % (self.__class__.__name__ , c[1]))
 			else :
 				self.columns[c[0]] = c[1]
@@ -342,9 +345,13 @@ class RabaList(list) :
 		
 		self.connection = RabaConnection()
 		try :
-			tableName = self._makeTableName(argk['indexedClass'], argk['relationName'], argk['anchorObj'])
+			tableName = self._makeTableName(argk['indexedClass'], argk['relationName'], argk['anchorObj']._rabaClass)
+			
+			if not self.connection.tableExits(tableName) :
+				cur.execute('CREATE TABLE %s(achorId, id)' % tableName)
+
 			cur = self.connection.cursor()
-			cur.execute('SELECT * FROM %s WHERE 1' % tableName)
+			cur.execute('SELECT * FROM %s WHERE anchorId = ?' % tableName, (argk['anchorObj'].id, ))
 			for aidi in cur :
 				self.append(RabaPupa(argk['indexedClass'], aidi[0]))
 				
@@ -372,24 +379,30 @@ class RabaList(list) :
 		for i in range(len(self)) :
 			self[i] = self[i].pupa()
 
+	def _erase(self, relationName , anchorObj) :
+		tableName = self._makeTableName(self[0]._rabaClass, relationName, anchorObj._rabaClass)
+		cur = self.connection.cursor()
+		cur.execute('UPDATE %s SET anchorId = NULL, id = NULL WHERE anchorId = ?' % tableName, (anchorObj.id,))
+	
 	def _save(self, relationName , anchorObj) :
-		"""saves the RabaList into it's own table. This a private function that should be called directly"""
-		if len(self) > 0 :
-			tableName = self._makeTableName(self[0]._rabaClass, relationName, anchorObj)
+		"""saves the RabaList into it's own table. This a private function that should be called directly
+		Before saving the entire list corresponding to the anchorObj is wiped out before being rewritten. The
+		alternative would be to keep the sync between the list and the table in real time (remove in both).
+		If the current solution proves to be to slow, i'll consider the alternative"""
 		
-			cur = self.connection.cursor()
-			cur.execute('DROP TABLE IF EXISTS %s' % tableName)
-			cur.execute('CREATE TABLE %s(id)' % tableName)
+		if len(self) > 0 :
+			self._erase(relationName , anchorObj)
+			
 			values = []
 			for e in self :
 				e.save()
-				values.append((e.id, ))
+				values.append((anchorObj.id, e.id))
 				
-			cur.executemany('INSERT INTO %s (id) VALUES (?)' % tableName, values)
+			cur.executemany('INSERT INTO %s (achorId, id) VALUES (?, ?)' % tableName, values)
 			self.connection.commit()
 
-	def _makeTableName(self, indexedClass, relationName, anchorObj) :
-		return 'RabaList_%s_of_%s_BelongsTo_%s_id_%s' % (relationName, indexedClass.__name__, anchorObj.__class__.__name__, anchorObj.id)
+	def _makeTableName(self, indexedClass, relationName, anchorClass) :
+		return 'RabaList_%s_type_%s_in_%s' % (relationName, indexedClass.__name__, anchorClass_.__name__)
 		
 	def __setitem__(self, k, v) :
 		if self._checkElmt(v) :

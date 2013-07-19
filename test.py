@@ -1,8 +1,8 @@
 from setup import *
-RabaConnection('./test.db')
+#RabaConnection('raba-db0.db')
 from Raba import *
 
-RabaConnection('raba-db1.db')
+
 #RabaConnection().dropTable('Gene')
 #RabaConnection().dropTable('vache')
 class Gene(Raba) :
