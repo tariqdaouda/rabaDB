@@ -33,6 +33,7 @@ class Autoincrement :
 class _Raba_MetaClass(type) :
 	def __new__(cls, name, bases, dct) :
 		fields = []
+		_fieldsLowCase = {}
 		autoIncr = True
 		
 		if 'id' not in dct :
@@ -41,6 +42,9 @@ class _Raba_MetaClass(type) :
 		for k, v in dct.items():
 			if k[0] != '_' and k != 'id' :
 				fields.append(k)
+				_fieldsLowCase[k.lower()] = k 
+
+		dct['_fieldsLowCase'] = _fieldsLowCase
 		
 		if dct['id'] is Autoincrement :
 			idStr = 'id INTEGER PRIMARY KEY AUTOINCREMENT'
@@ -57,7 +61,15 @@ class _Raba_MetaClass(type) :
 			
 			con.cursor().execute(sql)
 			con.connection.commit()
-			
+		
+		def _getAttr(self, k) :
+			try :
+				#print getattr(self, self._fieldsLowCase[k.lower()])
+				return getattr(self, self._fieldsLowCase[k.lower()])
+			except :
+				raise AttributeError("Raba type '%s' has no attribute '%s'" % (self.__name__, k))
+		
+		cls.__getattr__ = _getAttr
 		
 		return type.__new__(cls, name, bases, dct)
 
@@ -133,17 +145,19 @@ class Raba(object):
 		
 		self.connection = RabaConnection()
 		self.columns = {}
+		self.columnsLowCase = set()
 		cur = self.connection.cursor()
 		col = cur.execute('PRAGMA table_info(%s)' % self.__class__.__name__ )
 		
 		for c in col.fetchall() :
-			if c[1] != 'id' and c[1] not in self.__class__.__dict__:
-				self.connection.dropTable('RL')
-				TODOdropTheTableOfTheRL
+			if c[1] != 'id' and c[1] != '_fieldsLowCase' and c[1].lower() not in self.__class__._fieldsLowCase :
+				print '==>TODO: Drop The Table Of The RL'
+				#self.connection.dropTable('RL')
 				cur.execute('UPDATE %s SET %s=NULL WHERE 1;' % (self.__class__.__name__ , c[1]))
 			else :
 				self.columns[c[0]] = c[1]
-		
+				self.columnsLowCase.add(c[1].lower())
+
 		self.connection.commit()
 		
 		if self._idIsSet :
@@ -159,8 +173,8 @@ class Raba(object):
 							self.__setattr__(self.columns[i], res[i])
 						elif isRabaType(elmt) :
 							if not isinstance(res[i], types.NoneType) :
-								li = RabaListPupa(indexedClass = elmt.classObj, relationName = self.columns[i], anchorObj = self)
-								self.__setattr__(self.columns[i], li)
+								li = RabaListPupa(indexedClass = elmt._rabaClass, relationName = self.columns[i], anchorObj = self)
+								self.__setattr__(self.__class__._fieldsLowCase[self.columns[i].lower()], li)
 						else :
 							if res[i] != None :
 								self.__setattr__(self.columns[i], cPickle.loads(str(res[i])))
@@ -185,26 +199,32 @@ class Raba(object):
 		rabalists = []
 		cur = self.connection.cursor()
 		for k, v in self.__class__.__dict__.items() :
-			if k in self.__dict__ :
-				val = self.__dict__[k]
-			else :
-				val = v
-			
-			if not isinstance(val, types.FunctionType) and k[0] != '_'  and k != 'id' :
-				if k not in self.columns.values() :
-					sql = 'ALTER TABLE %s ADD %s;' % (self.__class__.__name__, k)
-					self.connection.cursor().execute(sql)
-				
-				fields.append(k)
-				if isPrimitiveType(val) :
-					values.append(val)
-				elif isRabaList(val) :
-					rabalists.append((k, val))
-					values.append('~rabalist~')
+			if k[0] != '_'  and k != 'id' :
+				 
+				if k in self.__dict__ :
+					val = self.__dict__[k]
 				else :
-					#serialize
-					values.append(buffer(cPickle.dumps(val)))
+					val = v
+				#print  k, self.__class__._fieldsLowCase[k.lower()], self.__class__._fieldsLowCase[k.lower()] in self.__dict__, isRabaList(val)
+				if not isinstance(val, types.FunctionType) :
+					if k.lower() not in (self.columnsLowCase) :
+						sql = 'ALTER TABLE %s ADD %s;' % (self.__class__.__name__, k.lower())
+						self.connection.cursor().execute(sql)
 					
+					fields.append(k)
+					if isPrimitiveType(val) :
+						values.append(val)
+					elif isRabaList(val) :
+						rabalists.append((k, val))
+						values.append(len(val))
+					elif isRabaType(val) :
+						#rabalists.append((k, val))
+						values.append(0)
+					else :
+						#serialize
+						values.append(buffer(cPickle.dumps(val)))
+		
+		#print rabalists
 		if len(values) > 0 :
 			if self._newEntry :
 				questionMarks = []
@@ -234,6 +254,7 @@ class Raba(object):
 			raise ValueError('class %s has no fields to save' % self.__class__.__name__)
 		
 		for relation, l in rabalists :
+			#print l
 			l._save(relation, self)
 			
 		self.connection.commit()
@@ -251,7 +272,7 @@ class Raba(object):
 		
 		#transform into a RabaListPupa
 		if isRabaType(elmt) :
-			elmt = RabaListPupa(indexedClass = elmt.classObj, relationName = k, anchorObj = self)
+			elmt = RabaListPupa(indexedClass = elmt._rabaClass, relationName = k, anchorObj = self)
 			setattr(self, k, elmt)
 		
 		return elmt
@@ -275,7 +296,7 @@ class RabaListPupa(list) :
 		self.relationName = relationName
 		self.anchorObj = anchorObj
 		self.indexedClass = indexedClass
-		self.bypassMutationAttr = set(['relationName', 'anchorObj', 'indexedClass', '__class__'])
+		self.bypassMutationAttr = set(['relationName', 'anchorObj', 'indexedClass', '__class__', '_morph'])
 		
 	def _morph(self) :
 		def getAttr(name) :
@@ -298,15 +319,14 @@ class RabaListPupa(list) :
 		
 	def __getitem__(self, k) :
 		self._morph()
-		#print 'll', self
 		return self[k]
 		
 	def __getattribute__(self, name) :
-
 		if name in list.__getattribute__(self, "bypassMutationAttr") :
 			return list.__getattribute__(self, name)
 		
 		list.__getattribute__(self, "_morph")()
+		
 		return list.__getattribute__(self, name)
 
 	def __repr__(self) :
@@ -346,14 +366,14 @@ class RabaList(list) :
 		self.connection = RabaConnection()
 		try :
 			tableName = self._makeTableName(argk['indexedClass'], argk['relationName'], argk['anchorObj']._rabaClass)
-			
+			cur = self.connection.cursor()
 			if not self.connection.tableExits(tableName) :
-				cur.execute('CREATE TABLE %s(achorId, id)' % tableName)
+				cur.execute('CREATE TABLE %s(anchorId, id)' % tableName)
 
 			cur = self.connection.cursor()
 			cur.execute('SELECT * FROM %s WHERE anchorId = ?' % tableName, (argk['anchorObj'].id, ))
 			for aidi in cur :
-				self.append(RabaPupa(argk['indexedClass'], aidi[0]))
+				self.append(RabaPupa(argk['indexedClass'], aidi[1]))
 				
 		except (KeyError, sq.OperationalError) :
 			pass
@@ -391,18 +411,20 @@ class RabaList(list) :
 		If the current solution proves to be to slow, i'll consider the alternative"""
 		
 		if len(self) > 0 :
+			
 			self._erase(relationName , anchorObj)
 			
 			values = []
 			for e in self :
 				e.save()
 				values.append((anchorObj.id, e.id))
-				
-			cur.executemany('INSERT INTO %s (achorId, id) VALUES (?, ?)' % tableName, values)
+			
+			tableName = self._makeTableName(self[0].__class__, relationName, anchorObj.__class__)
+			self.connection.cursor().executemany('INSERT INTO %s (anchorId, id) VALUES (?, ?)' % tableName, values)
 			self.connection.commit()
 
 	def _makeTableName(self, indexedClass, relationName, anchorClass) :
-		return 'RabaList_%s_type_%s_in_%s' % (relationName, indexedClass.__name__, anchorClass_.__name__)
+		return 'RabaList_%s_type_%s_in_%s' % (relationName, indexedClass.__name__, anchorClass.__name__)
 		
 	def __setitem__(self, k, v) :
 		if self._checkElmt(v) :
