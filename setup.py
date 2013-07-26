@@ -56,11 +56,6 @@ class RabaConnection(object) :
 	__metaclass__ = SingletonRabaConnection
 	
 	def __init__(self) :
-		#"The first time you instanciate a RabaConnection you must specify the dbFilename argument, the None default argument is just here so you can do RabaConnection() afterwards"
-		#if dbFilename == None :
-		#	raise ValueError("The first time you instanciate a RabaConnection you must specify the dbFilename argument, the None default argument is just here so you can do RabaConnection() afterwards")
-		
-
 		conf = confParser('rabaDB.conf')
 		
 		self.connection = sq.connect(conf['database filepath'])
@@ -71,7 +66,13 @@ class RabaConnection(object) :
 		self.tables = set()
 		for n in cur :
 			self.tables.add(n[0])
-	
+		
+		if not self.tableExits('rabalist_master') :
+			sql = "CREATE TABLE rabalist_master (anchor_type, relation_name, elements_type NOT NULL, table_name NOT NULL, PRIMARY KEY(anchor_type, relation_name))"
+			self.connection.cursor().execute(sql)
+			self.connection.commit()
+			self.tables.add('rabalist_master')
+			
 	def __getattr__(self, name):
 		return self.connection.__getattribute__(name)
 		
@@ -79,6 +80,46 @@ class RabaConnection(object) :
 		return name in self.tables
 
 	def dropTable(self, name) :
-		sql = "DROP TABLE IF EXISTS %s" % name
-		self.connection.cursor().execute(sql)
+		if self.tableExits(name) :
+			sql = "DROP TABLE IF EXISTS %s" % name
+			self.connection.cursor().execute(sql)
+			self.connection.commit()
+			self.tables.remove(name)
+		
+	def createTable(self, tableName, strFields) :
+		if not self.tableExits(tableName) :
+			sql = 'CREATE TABLE %s ( %s)' % (tableName, strFields)
+			self.connection.cursor().execute(sql)
+			self.connection.commit()
+			self.tables.add(tableName)
+			
+	def registerRabalist(self, anchor_type, relation_name, elements_type, table_name) :
+		sql = 'INSERT INTO rabalist_master (anchor_type, relation_name, elements_type, table_name) VALUES (?, ?, ?, ?)'
+		self.connection.cursor().execute(sql, (anchor_type.__name__, relation_name, elements_type.__name__, table_name))
 		self.connection.commit()
+	
+	def unregisterRabaList(self, anchor_type, relation_name) :
+		sql = 'DELETE FROM rabalist_master WHERE anchor_type = ? AND relation_name = ?'
+		self.connection.cursor().execute(sql, (anchor_type.__name__, relation_name))
+		self.connection.commit()
+	
+	def getRabaListTableName(self, anchor_type, relation_name) :
+		sql = 'SELECT table_name FROM rabalist_master WHERE anchor_type = ? AND relation_name = ?'
+		cur = self.connection.cursor()
+		cur.execute(sql, (anchor_type.__name__, relation_name))
+		res = cur.fetchone()
+		if res != None :
+			return res[0]
+		else :
+			return None
+
+	def getRabaListTables(self) :
+		sql = 'SELECT table_name FROM rabalist_master WHERE 1'
+		cur = self.connection.cursor()
+		cur.execute(sql)
+		
+		res = []
+		for c in cur :
+			res.append(c[0])
+		
+		return res 

@@ -55,13 +55,12 @@ class _Raba_MetaClass(type) :
 		
 		if name != 'Raba' and not con.tableExits(name) :
 			if len(fields) > 0 :
-				sql = 'CREATE TABLE %s (%s, %s)' % (name, idStr, ', '.join(list(fields)))
+				#sql = 'CREATE TABLE %s (%s, %s)' % (name, idStr, ', '.join(list(fields)))
+				con.createTable(name, '%s, %s' % (idStr, ', '.join(list(fields))))
 			else :
-				sql = 'CREATE TABLE %s (%s)' % (name, idStr)
+				#sql = 'CREATE TABLE %s (%s)' % (name, idStr)
+				con.createTable(name, '%s' % idStr)
 			
-			con.cursor().execute(sql)
-			con.connection.commit()
-		
 		def _getAttr(self, k) :
 			try :
 				#print getattr(self, self._fieldsLowCase[k.lower()])
@@ -147,12 +146,17 @@ class Raba(object):
 		self.columns = {}
 		self.columnsLowCase = set()
 		cur = self.connection.cursor()
-		col = cur.execute('PRAGMA table_info(%s)' % self.__class__.__name__ )
+		cur.execute('PRAGMA table_info(%s)' % self.__class__.__name__ )
 		
-		for c in col.fetchall() :
+		for c in cur :
+			#print c
 			if c[1] != 'id' and c[1] != '_fieldsLowCase' and c[1].lower() not in self.__class__._fieldsLowCase :
-				print '==>TODO: Drop The Table Of The RL'
-				#self.connection.dropTable('RL')
+				tableName = self.connection.getRabaListTableName(self._rabaClass, c[1])
+				print 'tableName', tableName
+				if tableName != None :
+					self.connection.dropTable(tableName)
+					self.connection.unregisterRabaList(self._rabaClass, c[1])
+					
 				cur.execute('UPDATE %s SET %s=NULL WHERE 1;' % (self.__class__.__name__ , c[1]))
 			else :
 				self.columns[c[0]] = c[1]
@@ -368,7 +372,10 @@ class RabaList(list) :
 			tableName = self._makeTableName(argk['indexedClass'], argk['relationName'], argk['anchorObj']._rabaClass)
 			cur = self.connection.cursor()
 			if not self.connection.tableExits(tableName) :
-				cur.execute('CREATE TABLE %s(anchorId, id)' % tableName)
+				#cur.execute('CREATE TABLE %s(anchorId, id, PRIMARY KEY(anchorId, id))' % tableName)
+				self.connection.createTable(tableName, 'anchorId, id, PRIMARY KEY(anchorId, id)')
+				
+				self.connection.registerRabalist(argk['anchorObj']._rabaClass, argk['relationName'], argk['indexedClass'], tableName)
 
 			cur = self.connection.cursor()
 			cur.execute('SELECT * FROM %s WHERE anchorId = ?' % tableName, (argk['anchorObj'].id, ))
@@ -419,7 +426,7 @@ class RabaList(list) :
 				e.save()
 				values.append((anchorObj.id, e.id))
 			
-			tableName = self._makeTableName(self[0].__class__, relationName, anchorObj.__class__)
+			tableName = self._makeTableName(self[0].__class__, relationName, anchorObj._rabaClass)
 			self.connection.cursor().executemany('INSERT INTO %s (anchorId, id) VALUES (?, ?)' % tableName, values)
 			self.connection.commit()
 

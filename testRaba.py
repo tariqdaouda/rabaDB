@@ -12,16 +12,16 @@ class Gene(Raba) :
 
 class Chromosome(Raba) :
 	id = '22'
-	genes = RabaType(Gene)
+	#genes = RabaType(Gene)
 	def __init__(self, uniqueId = None) :
 		Raba.__init__(self, uniqueId)
 
 def comm() :
 	gene = Gene('TPST2')
 	chro = Chromosome('22')
+	chro.genes.append(gene)
 	print chro.genes[-1].name
 	print chro.genes
-	chro.genes.append(gene)
 	chro.save()
 
 def comm2() :
@@ -45,15 +45,24 @@ def comm2() :
 
 	print field, '-', operator, '-', value
 
-#comm2()
+con = RabaConnection()
+c = Chromosome()
+g = Gene('gg')
+"""
+comm()
 
 f = RabaQuery(Chromosome)
 f.addFilter(**{'id' : '= "22"'})
 f.addFilter(['id = "22"', 'count(genes) = 4'])
 f.addFilter('count(genes) = 4', id = '= "22"')
-print f.run(True)
+#print f.run(True)
+print "sssss"
 for chro in f.run() :
 	print chro
 	print chro.genes
 	print chro
 	print chro.genes[0].name
+	print chro.genes
+"""
+print con.tables
+print con.getRabaListTables()
