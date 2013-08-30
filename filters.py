@@ -4,10 +4,11 @@ import re, types
 
 class RabaQuery :
 	
-	def __init__(self, rabaType) :
+	def __init__(self, namespace, rabaType) :
 		self.rabaType = rabaType
 		self.filters = []
-		self.con = RabaConnection()
+		self._raba_namespace = namespace
+		self.con = RabaConnection(self._raba_namespace)
 		
 		self.fctPattern = re.compile("\s*([^\s]+)\s*\(\s*([^\s]+)\s*\)\s*([=><])\s*([^\s]+)\s*")
 		self.fieldPattern = re.compile("\s*([^\s\(\)]+)\s*([=><]|([L|l][I|i][K|k][E|e]))\s*(.+)")
@@ -15,6 +16,7 @@ class RabaQuery :
 		self.supportedFunctions = set(('count', ))
 		
 	def addFilter(self, *lstFilters, **dctFilters) :
+		"add a new filter to the query"
 		strFilters = []#list(lstFilters)
 		for v in lstFilters :
 			if isinstance(v, types.ListType) or isinstance(v, types.TupleType) :
@@ -75,6 +77,7 @@ class RabaQuery :
 		return True
 		
 	def run(self, returnSQL = False) :
+		"Runs the query and returns the result"
 		sqlFilters = []
 		for f in self.filters :
 			sqlFilters.append('(%s)' % ' AND '.join(f))

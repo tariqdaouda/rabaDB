@@ -1,26 +1,21 @@
-from setup import *
-#RabaConnection('raba-db0.db')
-from Raba import *
+class RabaNameSpaceSingleton(type):
+	_instances = {}
+	def __call__(cls, *args, **kwargs):
+		key = '%s%s' % (cls, args[0])
+		if cls not in cls._instances:
+			cls._instances[key] = super(RabaNameSpaceSingleton, cls).__call__(*args, **kwargs)
+		
+		return cls._instances[key]
 
+class A :
+	__metaclass__ = RabaNameSpaceSingleton
+	def __init__(self, a) :
+		self.a = a
 
-#RabaConnection().dropTable('Gene')
-#RabaConnection().dropTable('vache')
-class Gene(Raba) :
-	id = Autoincrement
-	name = "TPST2"
-	def __init__(self, name, uniqueId = None) :
-		self.name = name
-		Raba.__init__(self, uniqueId)
-	
-class Vache(Raba) :
-	id = None
-	genes = RabaType(Gene)
-	def __init__(self, uniqueId = None) :
-		Raba.__init__(self, uniqueId)
+a = A('a')
+b = A('b')
+c = A('a')
 
-v = Vache("vache1")
-print 'befor append', v.genes
-v.genes.append(Gene('sss'))
-print 'after apped', v.genes
-v.save()
-print 'after apped', v.genes
+print a.a
+print b.a
+print c.a

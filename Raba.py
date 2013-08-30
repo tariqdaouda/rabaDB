@@ -32,44 +32,46 @@ class Autoincrement :
 
 class _Raba_MetaClass(type) :
 	def __new__(cls, name, bases, dct) :
-		fields = []
-		_fieldsLowCase = {}
-		autoIncr = True
-		
-		if 'id' not in dct :
-			dct['id'] = Autoincrement
+		if name != 'Raba' :
+			fields = []
+			_fieldsLowCase = {}
+			autoIncr = True
 			
-		for k, v in dct.items():
-			if k[0] != '_' and k != 'id' :
-				fields.append(k)
-				_fieldsLowCase[k.lower()] = k 
-
-		dct['_fieldsLowCase'] = _fieldsLowCase
-		
-		if dct['id'] is Autoincrement :
-			idStr = 'id INTEGER PRIMARY KEY AUTOINCREMENT'
-		else :
-			idStr = 'id PRIMARY KEY'
-		
-		con = RabaConnection()
-		
-		if name != 'Raba' and not con.tableExits(name) :
-			if len(fields) > 0 :
-				#sql = 'CREATE TABLE %s (%s, %s)' % (name, idStr, ', '.join(list(fields)))
-				con.createTable(name, '%s, %s' % (idStr, ', '.join(list(fields))))
+			if 'id' not in dct :
+				dct['id'] = Autoincrement
+				
+			for k, v in dct.items():
+				if k[0] != '_' and k != 'id' :
+					fields.append(k)
+					_fieldsLowCase[k.lower()] = k 
+			
+			dct['_fieldsLowCase'] = _fieldsLowCase
+			
+			if dct['id'] is Autoincrement :
+				idStr = 'id INTEGER PRIMARY KEY AUTOINCREMENT'
 			else :
-				#sql = 'CREATE TABLE %s (%s)' % (name, idStr)
-				con.createTable(name, '%s' % idStr)
+				idStr = 'id PRIMARY KEY'
 			
-		def _getAttr(self, k) :
-			try :
-				#print getattr(self, self._fieldsLowCase[k.lower()])
-				return getattr(self, self._fieldsLowCase[k.lower()])
-			except :
-				raise AttributeError("Raba type '%s' has no attribute '%s'" % (self.__name__, k))
-		
-		cls.__getattr__ = _getAttr
-		
+			con = RabaConnection(dct['_raba_namespace'])
+			
+			#if name != 'Raba' and not con.tableExits(name) :
+			if not con.tableExits(name) :
+				if len(fields) > 0 :
+					#sql = 'CREATE TABLE %s (%s, %s)' % (name, idStr, ', '.join(list(fields)))
+					con.createTable(name, '%s, %s' % (idStr, ', '.join(list(fields))))
+				else :
+					#sql = 'CREATE TABLE %s (%s)' % (name, idStr)
+					con.createTable(name, '%s' % idStr)
+				
+			def _getAttr(self, k) :
+				try :
+					#print getattr(self, self._fieldsLowCase[k.lower()])
+					return getattr(self, self._fieldsLowCase[k.lower()])
+				except :
+					raise AttributeError("Raba type '%s' has no attribute '%s'" % (self.__name__, k))
+			
+			cls.__getattr__ = _getAttr
+			
 		return type.__new__(cls, name, bases, dct)
 
 class RabaType(object) :
@@ -142,7 +144,7 @@ class Raba(object):
 		if  not  hasattr(self.__class__, 'id') :
 			setattr(self.__class__, 'id', Autoincrement)
 		
-		self.connection = RabaConnection()
+		self.connection = RabaConnection(self._rabaClass._raba_namespace)
 		self.columns = {}
 		self.columnsLowCase = set()
 		cur = self.connection.cursor()
@@ -152,7 +154,7 @@ class Raba(object):
 			#print c
 			if c[1] != 'id' and c[1] != '_fieldsLowCase' and c[1].lower() not in self.__class__._fieldsLowCase :
 				tableName = self.connection.getRabaListTableName(self._rabaClass, c[1])
-				print 'tableName', tableName
+				#print 'tableName', tableName
 				if tableName != None :
 					self.connection.dropTable(tableName)
 					self.connection.unregisterRabaList(self._rabaClass, c[1])
@@ -177,7 +179,7 @@ class Raba(object):
 							self.__setattr__(self.columns[i], res[i])
 						elif isRabaType(elmt) :
 							if not isinstance(res[i], types.NoneType) :
-								li = RabaListPupa(indexedClass = elmt._rabaClass, relationName = self.columns[i], anchorObj = self)
+								li = RabaListPupa(self._raba_namespace, indexedClass = elmt._rabaClass, relationName = self.columns[i], anchorObj = self)
 								self.__setattr__(self.__class__._fieldsLowCase[self.columns[i].lower()], li)
 						else :
 							if res[i] != None :
@@ -296,7 +298,8 @@ class Raba(object):
 class RabaListPupa(list) :
 	_isRabaList = True
 	
-	def __init__(self, indexedClass, relationName, anchorObj) :
+	def __init__(self, namespace, indexedClass, relationName, anchorObj) :
+		self._raba_namespace = namespace
 		self.relationName = relationName
 		self.anchorObj = anchorObj
 		self.indexedClass = indexedClass
@@ -314,12 +317,13 @@ class RabaListPupa(list) :
 		indC = getAttr('indexedClass')
 		relName = getAttr('relationName')
 		anchObj = getAttr('anchorObj')
+		namespace =  getAttr('_raba_namespace')
 		
 		purge = getAttr('__dict__').keys()
 		for k in purge :
 			delattr(self, k)
 		
-		RabaList.__init__(self, indexedClass = indC, relationName = relName, anchorObj = anchObj)
+		RabaList.__init__(self, namespace, indexedClass = indC, relationName = relName, anchorObj = anchObj)
 		
 	def __getitem__(self, k) :
 		self._morph()
@@ -346,7 +350,7 @@ class RabaList(list) :
 		if not isRabaClass(v) :
 			return False
 			
-		if len(self) > 0 and v._rabaClass != self[0]._rabaClass :
+		if len(self) > 0 and v._rabaClass != self[0]._rabaClass or  v._raba_namespace != self._raba_namespace :
 			return False
 		
 		return True
@@ -359,15 +363,16 @@ class RabaList(list) :
 		return (True, None)
 	
 	def _dieInvalidRaba(self, v) :
-		raise TypeError('Only Raba objects of the same class can be stored in RabaLists. Elmt: %s is not a valid RabaObject' % v)
+		raise TypeError('Only Raba objects of the same class can be stored in RabaLists and into the same namespace. Elmt: %s is not a valid RabaObject' % v)
 			
-	def __init__(self, *argv, **argk) :
+	def __init__(self, namespace, *argv, **argk) :
 		list.__init__(self, *argv)
 		check = self._checkRabaList(self)
 		if not check[0]:
 			self._dieInvalidRaba(check[1])
 		
-		self.connection = RabaConnection()
+		self._raba_namespace = namespace
+		self.connection = RabaConnection(self._raba_namespace)
 		try :
 			tableName = self._makeTableName(argk['indexedClass'], argk['relationName'], argk['anchorObj']._rabaClass)
 			cur = self.connection.cursor()

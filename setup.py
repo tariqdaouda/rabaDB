@@ -1,64 +1,48 @@
 import sqlite3 as sq
 import os
 
-class confParser :
-	def __init__(self, fp) :
-		self.fp = fp
-		try :
-			f = open(fp)
-			self.lines = f.readlines()
-			f.close()
-		except IOError:
-			self.createFile()
-			raise IOError("Can't find rabaDB.conf file in current directory, i've created one for you. Please fill it an rerun the script")
-		
-		self.parse()
-	
-	def createFile(self) :
-		pattern = """#This is a comment
-#enter the filename to the rabaDB file to be used (it it dosen't exist an empty DB will be created)
-database filepath:"""
-		
-		f = open('rabaDB.conf', 'w')
-		f.write(pattern)
-		f.close()
-		
-	def parse(self) :
-		
-		self.values = {}
-		for l in self.lines :
-			if l[0] != '#' :
-				sl = l.split(':')
-				if len(sl) > 2 :
-					raise ValueError("line %s of %s must contain only one ':'" % (l, self.fp))
-			
-				if sl[0].strip() == 'database filepath' :
-					self.values[sl[0]] = sl[1].strip()
-		
-		if 'database filepath' not in self.values  or self.values['database filepath'] == '' :
-			raise ValueError("the field 'database filepath' of %s must be filled" % (self.fp))
-			
-	def __getitem__(self, i) :
-		return self.values[i]
+#class RabaSingleton(type):
+#	_instances = {}
+#	def __call__(cls, *args, **kwargs):
+#		if cls not in cls._instances:
+#			cls._instances[cls] = super(RabaSingleton, cls).__call__(*args, **kwargs)
+#		
+#		return cls._instances[cls]
 
-class SingletonRabaConnection(type):
+
+class RabaNameSpaceSingleton(type):
 	_instances = {}
 	def __call__(cls, *args, **kwargs):
-		if cls not in cls._instances:
-			cls._instances[cls] = super(SingletonRabaConnection, cls).__call__(*args, **kwargs)
-		
-		return cls._instances[cls]
+		if len(args) < 1 :
+			raise ValueError('The first argument to %s must be a namespace' % cls.__name__)
+		key = '%s-%s' % (cls.__name__, args[0])
+		if key not in cls._instances:
+			cls._instances[key] = super(RabaNameSpaceSingleton, cls).__call__(*args, **kwargs)
+		return cls._instances[key]
+
+class RabaConfiguration(object) :
+	"""This class must be instanciated at the begining of the script just after the import of setup giving it the path to the the DB file. ex : 
+	
+	from rabaDB.setup import *
+	RabaConfiguration(namespace, './dbTest.db')
+	
+	After the first instanciation you can call it without parameters. As this class is a Singleton, it will always return the same instance"""
+	__metaclass__ = RabaNameSpaceSingleton
+	
+	def __init__(self, namespace, dbFile = None) :
+		if dbFile == None :
+			raise ValueError("""No configuration detected for namespace '%s'.
+			Have you forgotten to add: %s('%s', 'the path to you db file') just after the import of setup?""" % (namespace, self.__class__.__name__, namespace))
+		self.dbFile = dbFile
 
 class RabaConnection(object) :
-	"""A class that manages the connection to the sqlite3 database. This a singleton, there can only be one single connection to a single file.
-	Don't be afraid to call RabaConnection() as much as you want"""
+	"""A class that manages the connection to the sqlite3 database. Don't be afraid to call RabaConnection() as much as you want"""
 	
-	__metaclass__ = SingletonRabaConnection
+	__metaclass__ = RabaNameSpaceSingleton
 	
-	def __init__(self) :
-		conf = confParser('rabaDB.conf')
-		
-		self.connection = sq.connect(conf['database filepath'])
+	def __init__(self, namespace) :
+		#conf = confParser('rabaDB.conf')
+		self.connection = sq.connect(RabaConfiguration(namespace).dbFile)
 		
 		cur = self.connection.cursor()
 		sql = "SELECT name FROM sqlite_master WHERE type='table'"

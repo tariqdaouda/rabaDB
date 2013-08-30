@@ -4,15 +4,17 @@ from filters import *
 import re
 
 class Gene(Raba) :
-	id = Autoincrement
+	id = primarykey
+	genome = foreinKey('Genome.id')
 	name = ''
 	def __init__(self, name, uniqueId = None) :
 		Raba.__init__(self, uniqueId)
 		self.name = name
 
 class Chromosome(Raba) :
-	id = '22'
-	#genes = RabaType(Gene)
+	number = primaryKey
+	genome = primarykey
+	genes = RabaType(Gene)
 	def __init__(self, uniqueId = None) :
 		Raba.__init__(self, uniqueId)
 
