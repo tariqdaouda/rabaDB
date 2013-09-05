@@ -14,7 +14,7 @@ class RabaQuery :
 		self.fieldPattern = re.compile("\s*([^\s\(\)]+)\s*([=><]|([L|l][I|i][K|k][E|e]))\s*(.+)")
 		
 		self.supportedFunctions = set(('count', ))
-		
+	
 	def addFilter(self, *lstFilters, **dctFilters) :
 		"add a new filter to the query"
 		strFilters = []#list(lstFilters)
@@ -60,7 +60,7 @@ class RabaQuery :
 			return '%s %s %s' % (field, operator, value)
 		else :
 			raise ValueError("RabaQuery Error: Unknown function %s" % fctName.upper())
-			
+	
 	def _parseField(self, wholeStr)	:
 		
 		match = self.fieldPattern.match(wholeStr)
@@ -75,7 +75,7 @@ class RabaQuery :
 			raise KeyError("RabaQuery Error: type '%s' has no field %s" % (self.rabaType.__name__, field))
 
 		return True
-		
+	
 	def run(self, returnSQL = False) :
 		"Runs the query and returns the result"
 		sqlFilters = []

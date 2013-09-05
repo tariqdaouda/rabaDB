@@ -73,8 +73,9 @@ class RabaConnection(object) :
 	def createTable(self, tableName, strFields) :
 		if not self.tableExits(tableName) :
 			sql = 'CREATE TABLE %s ( %s)' % (tableName, strFields)
+			print sql
 			self.connection.cursor().execute(sql)
-			self.connection.commit()
+			#self.connection.commit()
 			self.tables.add(tableName)
 			
 	def registerRabalist(self, anchor_type, relation_name, elements_type, table_name) :
