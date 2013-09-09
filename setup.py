@@ -56,7 +56,13 @@ class RabaConnection(object) :
 			self.connection.cursor().execute(sql)
 			self.connection.commit()
 			self.tables.add('rabalist_master')
-			
+		
+		if not self.tableExits('raba_tables_constraints') :
+			sql = "CREATE TABLE raba_tables_constraints (table_name, constraints, PRIMARY KEY(table_name))"
+			self.connection.cursor().execute(sql)
+			self.connection.commit()
+			self.tables.add('raba_tables_constraints')
+		
 	def __getattr__(self, name):
 		return self.connection.__getattribute__(name)
 		
@@ -75,7 +81,7 @@ class RabaConnection(object) :
 			sql = 'CREATE TABLE %s ( %s)' % (tableName, strFields)
 			print sql
 			self.connection.cursor().execute(sql)
-			#self.connection.commit()
+			self.connection.commit()
 			self.tables.add(tableName)
 			
 	def registerRabalist(self, anchor_type, relation_name, elements_type, table_name) :

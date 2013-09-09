@@ -1,5 +1,5 @@
 import sqlite3 as sq
-import os, types, cPickle, random
+import os, types, cPickle, random, json
 from setup import RabaConnection
 from fields import *
 
@@ -10,27 +10,28 @@ from fields import *
 #		types.add(c.__name__)
 #	return types
 
-class _Raba_MetaClass(type) :
+loadedRabaClasses = {}
+
+class _Raba_MetaClass_bck(type) :
 	def __new__(cls, name, bases, dct) :
 		if name != 'Raba' :
 			fields = []
 			_fieldsLowCase = {}
 			
-			dct['raba_id'] = Primitive()
 			for k, v in dct.items():
 				if isField(v) :
 					fields.append(k)
 					_fieldsLowCase[k.lower()] = k 
 			
 			uniqueStr = ''
-			for c in dct['_raba_uniques'] :
-				if len(c) > 1 :
-					uniqueStr += 'UNIQUE%s ON CONFLICT REPLACE, ' % str(c)
-				else :
-					uniqueStr += 'UNIQUE(%s) ON CONFLICT REPLACE, ' % str(c[0])
+			if '_raba_uniques' in dct :
+				for c in dct['_raba_uniques'] :
+					if len(c) > 1 :
+						uniqueStr += 'UNIQUE%s ON CONFLICT REPLACE, ' % str(c)
+					else :
+						uniqueStr += 'UNIQUE(%s) ON CONFLICT REPLACE, ' % str(c[0])
 					
 			uniqueStr = uniqueStr[:-2]
-			dct['_fieldsLowCase'] = _fieldsLowCase
 			
 			idStr = 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT'
 			
@@ -49,9 +50,106 @@ class _Raba_MetaClass(type) :
 					raise AttributeError("Raba type '%s' has no attribute '%s'" % (self.__name__, k))
 			
 			cls.__getattr__ = _getAttr
+		
+			_fieldsLowCase['raba_id'] = 'raba_id'
+			dct['raba_id'] = Primitive()
+			dct['_fieldsLowCase'] = _fieldsLowCase
+		
+			clsObj = type.__new__(cls, name, bases, dct)
+			loadedRabaClasses[name] = clsObj
+			return clsObj
 			
 		return type.__new__(cls, name, bases, dct)
+
+class _Raba_MetaClass(type) :
 	
+	def __new__(cls, name, bases, dct) :
+		if name != 'Raba' :
+			fields = []
+			columns = {}
+			columnsLower = set()
+			
+			i = 1
+			for k, v in dct.items():
+				if isField(v) :
+					fields.append(k)
+					columns[k] = i
+					columnsLower.add(k.lower())
+					i += 1
+			
+			con = RabaConnection(dct['_raba_namespace'])
+			uniqueStr = ''
+			if '_raba_uniques' in dct :
+				for c in dct['_raba_uniques'] :
+					if len(c) > 1 :
+						uniqueStr += 'UNIQUE%s ON CONFLICT REPLACE, ' % str(c)
+					else :
+						uniqueStr += 'UNIQUE(%s) ON CONFLICT REPLACE, ' % str(c[0])
+					
+			uniqueStr = uniqueStr[:-2]
+				
+			if not con.tableExits(name) :
+				
+				idStr = 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT'
+				if len(fields) > 0 :
+					con.createTable(name, '%s, %s, %s' % (idStr, ', '.join(list(fields)), uniqueStr))
+				else :
+					con.createTable(name, '%s' % idStr)
+				
+				sqlCons =  'INSERT INTO raba_tables_constraints (table_name, constraints) VALUES (?, ?)'
+				con.cursor().execute(sqlCons, (name, uniqueStr))
+				con.commit()
+			else :
+				cur = con.cursor()
+				sql = 'SELECT constraints FROM raba_tables_constraints WHERE table_name = ?'
+				cur.execute(sql, (name,))
+				res = cur.fetchone()
+				
+				if res[0] != uniqueStr :
+					print 'Warning: The unique contraints have changed from:\n\t%s\n\nto:\n\t%s.\n-Unique constraints modification is not supported yet-\n' %(res[0], uniqueStr)
+					
+				cur.execute('PRAGMA table_info(%s)' % name)
+				tableColumns = set()
+				fieldsToKill = []
+				#Destroy field that have mysteriously desapeared
+				for c in cur :
+					if c[1] != 'raba_id' and c[1].lower() not in columnsLower :
+						#tableName = self.connection.getRabaListTableName(self._rabaClass, c[1])
+						#if tableName != None :
+						#	self.connection.dropTable(tableName)
+						#	self.connection.unregisterRabaList(self._rabaClass, c[1])
+				
+						fieldsToKill.append('%s = NULL' % c[1])
+					tableColumns.add(c[1].lower())
+	
+				if len(fieldsToKill) > 0 :
+					sql = 'UPDATE %s SET %s WHERE 1;' % (name , ', '.join(fieldsToKill))
+					cur.execute(sql)
+	
+				for k in columns :
+					if k.lower() not in tableColumns :
+						cur.execute('ALTER TABLE %s ADD COLUMN %s' % (name, k))
+				con.commit()
+			
+			def _class_getAttr(self, k) :
+				try :
+					return getattr(self, self._fieldsLowCase[k.lower()])
+				except :
+					raise AttributeError("Raba type '%s' has no attribute '%s'" % (self.__name__, k))
+			
+			cls.__getattr__ = _class_getAttr
+		
+			columns['raba_id'] = 0
+			dct['raba_id'] = Primitive()
+			dct['columns'] = columns
+		
+			clsObj = type.__new__(cls, name, bases, dct)
+			loadedRabaClasses[name] = clsObj
+			
+			return clsObj
+			
+		return type.__new__(cls, name, bases, dct)
+
 class RabaPupa(object) :
 	"""One of the founding principles of RabaDB is to separate the storage from the code. Fields are stored in the DB while the processing only depends
 	on your python code. This approach ensures a higher degree of stability by preventing old objects from lurking inside the DB before popping out of nowhere several decades afterwards. 
@@ -59,21 +157,20 @@ class RabaPupa(object) :
 	to the raba object class, and it's unique raba_id. Upon asking for one of the attributes of a pupa, it magically transforms into a full fledged raba object. This process is completly transparent to the user. Pupas also have the advantage of being light weight and also ensure that the only raba objects loaded are those explicitely accessed, thus potentialy saving a lot of memory.
 	For a pupa self._rabaClass refers to the class of the object "inside" the pupa.
 	"""
-	_isRabaClass = True
-
+	
 	def __init__(self, classObj, uniqueId) :
 		self._rabaClass = classObj
 		self.raba_id = uniqueId
 		self.__doc__ = classObj.__doc__
-		self.bypassMutationAttr = set(['_isRabaClass', '_rabaClass', 'raba_id', '__class__', '__doc__'])
-			
+		self.bypassMutationAttr = set(['_rabaClass', 'raba_id', '__class__', '__doc__'])
+		
 	def __getattribute__(self, name) :
 		def getAttr(name) :
 			return object.__getattribute__(self, name)
 			
 		def setAttr(name, value) :
 			object.__setattr__(self, name, value)
-	
+		
 		if name in getAttr('bypassMutationAttr'):
 			return object.__getattribute__(self, name)
 		
@@ -84,7 +181,7 @@ class RabaPupa(object) :
 		for k in purge :
 			delattr(self, k)
 			
-		Raba.__init__(self, uniqueId)
+		Raba.__init__(self, raba_id = uniqueId)
 		
 		return object.__getattribute__(self, name)
 	
@@ -94,7 +191,6 @@ class RabaPupa(object) :
 class Raba(object):
 	"All raba object must inherit from this class. If the class has no attribute raba_id, an autoincrement field raba_id will be created"	
 	__metaclass__ = _Raba_MetaClass
-	_isRabaClass = True
 	
 	def __init__(self, **fieldsSet) :
 		
@@ -104,24 +200,7 @@ class Raba(object):
 		self._rabaClass = self.__class__
 		
 		self.connection = RabaConnection(self._rabaClass._raba_namespace)
-		self.columns = {}
-		self.columnsLowCase = set()
-		cur = self.connection.cursor()
-		cur.execute('PRAGMA table_info(%s)' % self.__class__.__name__ )
-		
-		#Destroy field that have mysteriously desapeared
-		for c in cur :
-			if c[1] != 'raba_id'  and c[1].lower() not in self.__class__._fieldsLowCase :
-				tableName = self.connection.getRabaListTableName(self._rabaClass, c[1])
-				if tableName != None :
-					self.connection.dropTable(tableName)
-					self.connection.unregisterRabaList(self._rabaClass, c[1])
-					
-				cur.execute('UPDATE %s SET %s=NULL WHERE 1;' % (self.__class__.__name__ , c[1]))
-			else :
-				self.columns[c[0]] = c[1]
-				self.columnsLowCase.add(c[1].lower())
-		self.connection.commit()
+		self.columns = self.__class__.columns
 		
 		#Initialisation
 		self.raba_id = None
@@ -129,7 +208,7 @@ class Raba(object):
 		definedFields = []
 		definedValues = []
 		for k, v in fieldsSet.items() :
-			if k in self.__class__._fieldsLowCase :
+			if k.lower() in self.columns : 
 				object.__setattr__(self, k, v)
 				definedFields.append(k)
 				definedValues.append(v)
@@ -141,21 +220,31 @@ class Raba(object):
 			
 			strWhere = strWhere[:-4]
 			sql = 'SELECT * FROM %s WHERE %s' % (self.__class__.__name__, strWhere)
+			#print sql
 			cur = self.connection.cursor()
 			cur.execute(sql, definedValues)
 			res = cur.fetchone()
 			if cur.fetchone() != None :
-				raise KeyError("More than one object fit the arguments you've prodided to constructor")
+				raise KeyError("More than one object fit the arguments you've prodided to the constructor")
 			
 			if res != None :
-				for i in self.columns :
-					if self.columns[i] != 'raba_id' :
-						elmt = getattr(self.__class__, self.columns[i])
-						if isField(elmt) :
-							object.__setattr__(self, self.columns[i], res[i])
-					else :
-						object.__setattr__(self, self.columns[i], res[i])
-	
+				for k, i in self.columns.items() :
+					if k != 'raba_id' :
+						elmt = getattr(self.__class__, k)
+						if typeIsPrimitive(elmt) :
+							try :
+								object.__setattr__(self, k, cPickle.loads(str(res[i])))
+							except :
+								object.__setattr__(self, k, res[i])
+						elif typeIsRabaObject(elmt) :
+							if res[i] != None :
+								#print elmt, res[i]
+								val = json.loads(res[i])
+								object.__setattr__(self, k, RabaPupa(loadedRabaClasses[val["className"]], val["raba_id"]))
+								#object.__setattr__(self, k, res[i])
+					#else :
+					#	object.__setattr__(self, self.columns[i], res[i])
+		
 	def autoclean(self) :
 		"""TODO: Copies the table into a new one removing all the collumns that have all their values to NULL
 		and drop the tables that correspond to these tables"""
@@ -177,13 +266,23 @@ class Raba(object):
 					if valType is val :
 						values.append(val.default)
 						fields.append(k)
-					elif isPrimitive(valType) :
-						if isPythonPrimitive(val):
-							values.append(val)
+					else :
+						if not valType.check(val) :
+							raise ValueError("Unable to set '%s' to value '%s'. Constrain function violation" % (k, val))
+							
+						if typeIsPrimitive(valType) :
+							if isPythonPrimitive(val):
+								values.append(val)
+							else :
+								values.append(buffer(cPickle.dumps(val)))
 							fields.append(k)
-						else :
-							values.append(buffer(cPickle.dumps(val)))
-							fields.append(k)
+						elif typeIsRabaObject(valType) :
+							if valType != None :
+								val.save()
+								encodingDct = {'className' : val._rabaClass.__name__, 'raba_id' : val.raba_id}
+								#print 'json', json.dumps(encodingDct)
+								values.append(json.dumps(encodingDct))
+								fields.append(k)
 				else :
 					pass
 				
@@ -210,6 +309,7 @@ class Raba(object):
 		#	raise KeyError("You cannot change the raba_id once it has been set ( %s => %s, obj: %s)." % (self.raba_id, v, self))
 		#elif hasattr(self.__class__, k) and isRabaField(getattr(self.__class__, k)) and not isRabaList(v) : #and not isRabaClass(v) 
 		#	raise TypeError("I'm sorry but you can't replace a raba type by someting else (%s: from %s to %s)" %(k, getattr(self.__class__, k), v))
+		
 		if hasattr(self.__class__, k) and isField(getattr(self.__class__, k)) :
 			rf = getattr(self.__class__, k)
 			if not rf.check(v) :
