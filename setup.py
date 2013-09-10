@@ -34,7 +34,14 @@ class RabaConfiguration(object) :
 			raise ValueError("""No configuration detected for namespace '%s'.
 			Have you forgotten to add: %s('%s', 'the path to you db file') just after the import of setup?""" % (namespace, self.__class__.__name__, namespace))
 		self.dbFile = dbFile
-
+		self.loadedRabaClasses = {}
+	
+	def registerRabaClass(self, cls) :
+		self.loadedRabaClasses[cls.__name__] = cls
+	
+	def getClass(self, name) :
+		return self.loadedRabaClasses[name]
+	
 class RabaConnection(object) :
 	"""A class that manages the connection to the sqlite3 database. Don't be afraid to call RabaConnection() as much as you want"""
 	
@@ -52,7 +59,7 @@ class RabaConnection(object) :
 			self.tables.add(n[0])
 		
 		if not self.tableExits('rabalist_master') :
-			sql = "CREATE TABLE rabalist_master (anchor_type, relation_name, elements_type NOT NULL, table_name NOT NULL, PRIMARY KEY(anchor_type, relation_name))"
+			sql = "CREATE TABLE rabalist_master (anchor_type, relation_name, table_name NOT NULL, PRIMARY KEY(anchor_type, relation_name))"
 			self.connection.cursor().execute(sql)
 			self.connection.commit()
 			self.tables.add('rabalist_master')
@@ -84,12 +91,12 @@ class RabaConnection(object) :
 			self.connection.commit()
 			self.tables.add(tableName)
 			
-	def registerRabalist(self, anchor_type, relation_name, elements_type, table_name) :
-		sql = 'INSERT INTO rabalist_master (anchor_type, relation_name, elements_type, table_name) VALUES (?, ?, ?, ?)'
-		self.connection.cursor().execute(sql, (anchor_type.__name__, relation_name, elements_type.__name__, table_name))
+	def registerRabalistTable(self, anchor_type, relation_name, table_name) :
+		sql = 'INSERT INTO rabalist_master (anchor_type, relation_name, table_name) VALUES (?, ?, ?)'
+		self.connection.cursor().execute(sql, (anchor_type.__name__, relation_name, table_name))
 		self.connection.commit()
 	
-	def unregisterRabaList(self, anchor_type, relation_name) :
+	def unregisterRabaListTable(self, anchor_type, relation_name) :
 		sql = 'DELETE FROM rabalist_master WHERE anchor_type = ? AND relation_name = ?'
 		self.connection.cursor().execute(sql, (anchor_type.__name__, relation_name))
 		self.connection.commit()
