@@ -208,33 +208,29 @@ class Raba(object):
 		for k, valType in self.__class__.__dict__.items() :
 			if RabaFields.isField(valType) and k != 'raba_id':
 				val = getattr(self, k)
-				if valType is val or val == None :
-					values.append(valType.default)
-					fields.append(k)
-				else :
-					if not RabaFields.isRabaList(valType) :
-							if not valType.check(val) :
-								raise ValueError("Unable to set '%s' to value '%s'. Constrain function violation" % (k, val))
-							elif RabaFields.typeIsPrimitive(valType) :
-								if RabaFields.isPythonPrimitive(val):
-									values.append(val)
-								else :
-									values.append(buffer(cPickle.dumps(val)))
-								fields.append(k)
-							elif RabaFields.typeIsRabaObject(valType) :
-								if valType != None :
-									val.save()
-									encodingDct = {'className' : val._rabaClass.__name__, 'raba_id' : val.raba_id}
-									values.append(json.dumps(encodingDct))
-									fields.append(k)
-					else :
-						#if val.__class__ is RabaListPupa :
-						#	val._morph()
-						#el
-						if val.__class__ is RabaList :
-							val.save()
+				if not RabaFields.isRabaList(valType) :
+					if val == valType.default :
+						values.append(val)
+						fields.append(k)
+					elif not valType.check(val) :
+						raise ValueError("Unable to set '%s' to value '%s'. Constrain function violation" % (k, val))
+					elif RabaFields.typeIsPrimitive(valType) :
+						if RabaFields.isPythonPrimitive(val):
+							values.append(val)
 						else :
-							raise ValueError("Unable to set '%s' to value '%s' because it is not a valid RabaList" % (k, val))
+							values.append(buffer(cPickle.dumps(val)))
+						fields.append(k)
+					elif RabaFields.typeIsRabaObject(valType) :
+						if valType != None :
+							val.save()
+							encodingDct = {'className' : val._rabaClass.__name__, 'raba_id' : val.raba_id}
+							values.append(json.dumps(encodingDct))
+							fields.append(k)
+				else :
+					if val != None and val.__class__ is RabaList :
+						val._save()
+					else :
+						raise ValueError("Unable to set '%s' to value '%s' because it is not a valid RabaList" % (k, val))
 
 		if len(values) > 0 :
 			if self.raba_id == None :
@@ -252,16 +248,19 @@ class Raba(object):
 
 	def __setattr__(self, k, v) :
 		if hasattr(self.__class__, k) and RabaFields.isField(getattr(self.__class__, k)) :
-			classType = getattr(self.__class__, k)
-			if not classType.check(v) :
-				raise ValueError("Unable to set '%s' to value '%s'. Constrain function violation" % (k, v))
-		
+			if not RabaFields.isRabaList(getattr(self.__class__, k)) :
+				classType = getattr(self.__class__, k)
+				if not classType.check(v) :
+					raise ValueError("Unable to set '%s' to value '%s'. Constrain function violation" % (k, v))
+			else :
+				if v.__class__ is not RabaList and v.__class__ is not RabaListPupa :
+					raise ValueError("Unable to set '%s' to value '%s'. Value is not a valid RabaList" % (k, v))
+				
 		object.__setattr__(self, k, v)
 	
 	def __getattribute__(self, k) :
 		elmt = object.__getattribute__(self, k)
 		if RabaFields.isRabaList(elmt) :
-			print 'okp', k
 			elmt = RabaListPupa(namespace = self.__class__._raba_namespace, relationName = k, anchorObj = self)
 		elif RabaFields.isField(elmt) :
 			elmt = elmt.default
@@ -288,46 +287,48 @@ class RabaListPupa(list) :
 	_isRabaList = True
 	
 	def __init__(self, namespace, relationName, anchorObj) :
+		self.bypassMutationAttr = set(['relationName', 'anchorObj', '__class__', '_morph', 'length'])
 		self._raba_namespace = namespace
 		self.relationName = relationName
 		self.anchorObj = anchorObj
-		#self.indexedClass = indexedClass
-		self.bypassMutationAttr = set(['relationName', 'anchorObj', 'indexedClass', '__class__', '_morph'])
+		
+		self.length = RabaConnection(self._raba_namespace).getRabaListSize(self.anchorObj.__class__, self.relationName)
 		
 	def _morph(self) :
-		def getAttr(name) :
-			return list.__getattribute__(self, name)
-			
-		def setAttr(name, value) :
-			list.__setattr__(self, name, value)
+		list.__setattr__(self, '__class__', RabaList)
 		
-		setAttr('__class__', RabaList)
+		relName = list.__getattribute__(self, 'relationName')
+		anchObj = list.__getattribute__(self, 'anchorObj')
+		namespace = list.__getattribute__(self, '_raba_namespace')
 		
-		relName = getAttr('relationName')
-		anchObj = getAttr('anchorObj')
-		namespace = getAttr('_raba_namespace')
-		
-		purge = getAttr('__dict__').keys()
+		purge = list.__getattribute__(self, '__dict__').keys()
 		for k in purge :
 			delattr(self, k)
 		
 		RabaList.__init__(self, namespace = namespace, relationName = relName, anchorObj = anchObj)
 	
-	def __getitem__(self, k) :
+	def __getitem__(self, i) :
 		self._morph()
-		return self[k]
+		return self[i]
 		
 	def __getattribute__(self, name) :
 		if name in list.__getattribute__(self, "bypassMutationAttr") :
 			return list.__getattribute__(self, name)
 		
+		relName = list.__getattribute__(self, 'relationName')
+		anchObj = list.__getattribute__(self, 'anchorObj')
 		list.__getattribute__(self, "_morph")()
+		
+		anchObj.__setattr__(relName, self)
+		
 		return list.__getattribute__(self, name)
 
 	def __repr__(self) :
 		return "<RLPupa relationName: %s, anchorObj: %s >" % (self.relationName, self.anchorObj)
 
-
+	def __len__(self) :
+		return self.length
+		
 class RabaList(list) :
 	"""A RabaList is a list that can only contain Raba objects of the same class or (Pupas of the same class). They represent one to many relations and are stored in separate
 	tables that contain only one single line"""
@@ -360,23 +361,27 @@ class RabaList(list) :
 			self._setNamespaceConAndConf(argk['namespace'])
 			self.anchorObj = argk['anchorObj']
 			self.relationName = argk['relationName']
+		except (KeyError) :
+			self._raba_namespace = None
+			self.anchorObj = None
+			self.relationName = None
+		
+		if self.relationName != None  :
 			tableName = self._makeTableName(self.relationName, self.anchorObj._rabaClass)
 			cur = self.connection.cursor()
 			if not self.connection.tableExits(tableName) :
-				self.connection.createTable(tableName, 'anchor_id, raba_id, type, PRIMARY KEY(anchor_id, raba_id)')
+				self.connection.createTable(tableName, 'anchor_id, value_or_id, type, PRIMARY KEY(anchor_id, value_or_id)')
 				self.connection.registerRabalistTable(self.anchorObj._rabaClass, self.relationName, tableName)
 
 			cur = self.connection.cursor()
 			cur.execute('SELECT * FROM %s WHERE anchor_id = ?' % tableName, (self.anchorObj.raba_id, ))
 			for aidi in cur :
-				elmtId = aidi[1]
+				elmt = aidi[1]
 				typ = aidi[2]
-				self.append(RabaPupa(RabaConfiguration.getClass(typ), elmtId))
-				
-		except (KeyError) :
-			self._raba_namespace = None
-			self.anchorObj = None
-			self.relationName = None
+				if typ ==  RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE :
+					self.append(elmt)
+				else :
+					self.append(RabaPupa(RabaConfiguration(self._raba_namespace).getClass(typ), elmt))
 	
 	def _setNamespaceConAndConf(self, namespace) :
 		self._raba_namespace = namespace
@@ -389,9 +394,9 @@ class RabaList(list) :
 			self[i] = self[i].pupa()
 
 	def _erase(self, relationName , anchorObj) :
-		tableName = self._makeTableName(self[0]._rabaClass, relationName, anchorObj._rabaClass)
+		tableName = self._makeTableName(relationName, anchorObj._rabaClass)
 		cur = self.connection.cursor()
-		cur.execute('UPDATE %s SET anchorId = NULL, raba_id = NULL, type = NULL WHERE anchorId = ?' % tableName, (anchorObj.raba_id,))
+		cur.execute('UPDATE %s SET anchor_id = NULL, value_or_id = NULL, type = NULL WHERE anchor_id = ?' % tableName, (anchorObj.raba_id,))
 	
 	def _save(self) :
 		"""saves the RabaList into it's own table. This a private function that should be called directly
@@ -408,14 +413,16 @@ class RabaList(list) :
 			for e in self :
 				if RabaFields.isRabaObject(e) :
 					e.save()
-					values.append((anchorObj.raba_id, e.raba_id, fields.RABA_FIELD_TYPE_IS_RABA_OBJECT))
+					values.append((self.anchorObj.raba_id, e.raba_id, self.anchorObj.__class__.__name__))
 				else :
-					values.append((anchorObj.raba_id, e.raba_id, fields.RABA_FIELD_TYPE_IS_PRIMITIVE))
+					values.append((self.anchorObj.raba_id, e.raba_id, RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE))
 			
 			tableName = self._makeTableName(self.relationName, self.anchorObj._rabaClass)
-			self.connection.cursor().executemany('INSERT INTO %s (anchorId, raba_id, type) VALUES (?, ?, ?)' % tableName, values)
+			self.connection.cursor().executemany('INSERT INTO %s (anchor_id, value_or_id, type) VALUES (?, ?, ?)' % tableName, values)
 			self.connection.commit()
-
+			
+			self.connection.updateRabaListSize(self.relationName, len(self))
+	
 	def _makeTableName(self, relationName, anchorClass) :
 		return 'RabaList_%s_for_%s' % (relationName, anchorClass.__name__)
 	
