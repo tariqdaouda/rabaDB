@@ -3,6 +3,7 @@ import types
 RABA_FIELD_TYPE_IS_UNDEFINED = 'UNDEFINED'
 RABA_FIELD_TYPE_IS_PRIMITIVE = 'PRIMITIVE'
 RABA_FIELD_TYPE_IS_RABA_OBJECT = 'RABA_OBJECT'
+RABA_FIELD_TYPE_IS_RABA_LIST = 'RABA_LIST'
 
 class RabaField(object) :
 	_raba_field = True
@@ -27,6 +28,7 @@ class RabaField(object) :
 class List(object) :
 	_raba_field = True
 	_raba_list = True
+	_raba_type = RABA_FIELD_TYPE_IS_RABA_LIST
 
 	def __init__(self) :
 		self.default = None
@@ -49,7 +51,7 @@ class RabaObject(RabaField) :
 	def __init__(self, objClassName = None, default = None, constrainFct = None, *constrainFctArgs, **constrainFctWArgs) :
 		
 		if default != None and not isRabaObject(default) :
-			raise ValueError("Defailt is not a valid Raba Object")
+			raise ValueError("Default value is not a valid Raba Object")
 		
 		RabaField.__init__(self,  default, constrainFct, *constrainFctArgs, **constrainFctWArgs)
 		self.objClassName = objClassName
@@ -77,6 +79,9 @@ def typeIsPrimitive(v) :
 def typeIsRabaObject(v) :
 	return hasattr(v.__class__, '_raba_type') and v.__class__._raba_type == RABA_FIELD_TYPE_IS_RABA_OBJECT
 
+def typeIsRabaList(v) :
+	return hasattr(v.__class__, '_raba_type') and v.__class__._raba_type == RABA_FIELD_TYPE_IS_RABA_LIST
+	
 def isPythonPrimitive(v) :
 	primTypes = [types.IntType, types.LongType, types.FloatType, types.StringType, types.UnicodeType, types.BufferType, types.NoneType]
 	for t in primTypes :

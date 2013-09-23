@@ -184,10 +184,13 @@ class Raba(object):
 								object.__setattr__(self, k, res[i])
 						elif RabaFields.typeIsRabaObject(elmt) :
 							if res[i] != None :
-								print res[i]
+								print 'tralala', res[i]
 								val = json.loads(res[i])
 								objClass = self.rabaConfiguration.getClass(val["className"])
 								object.__setattr__(self, k, RabaPupa(objClass, val["raba_id"]))
+						elif RabaFields.typeIsRabaList(elmt) :
+							object.__setattr__(self, k, RabaListPupa(self._rabaClass._raba_namespace, res[i]))
+							
 					#else :
 					#	object.__setattr__(self, self.columns[i], res[i])
 		
@@ -286,12 +289,14 @@ class Raba(object):
 class RabaListPupa(list) :
 	_isRabaList = True
 	
-	def __init__(self, namespace, relationName, anchorObj) :
+	def __init__(self, namespace, id) :
 		self.bypassMutationAttr = set(['relationName', 'anchorObj', '__class__', '_morph', 'length'])
 		self._raba_namespace = namespace
+		
 		self.relationName = relationName
 		self.anchorObj = anchorObj
-		
+		self.id = id
+			
 		self.length = RabaConnection(self._raba_namespace).getRabaListSize(self.anchorObj.__class__, self.relationName)
 		
 	def _morph(self) :
