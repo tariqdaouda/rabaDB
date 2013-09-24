@@ -59,7 +59,7 @@ class RabaConnection(object) :
 			self.tables.add(n[0])
 		
 		if not self.tableExits('rabalist_master') :
-			sql = "CREATE TABLE rabalist_master (id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_class NOT NULL, relation_name NOT NULL, table_name NOT NULL)"
+			sql = "CREATE TABLE rabalist_master (id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_class NOT NULL, relation_name NOT NULL, table_name NOT NULL, length DEFAULT 0)"
 			self.connection.cursor().execute(sql)
 			self.connection.commit()
 			self.tables.add('rabalist_master')
@@ -90,46 +90,42 @@ class RabaConnection(object) :
 			self.connection.cursor().execute(sql)
 			self.connection.commit()
 			self.tables.add(tableName)
-			
-	#def registerRabalistTable(self, anchor_class, relation_name, table_name) :
-	#	sql = 'INSERT INTO rabalist_master (anchor_class, relation_name, table_name, size) VALUES (?, ?, ?, ?)'
-	#	self.connection.cursor().execute(sql, (anchor_class.__name__, relation_name, table_name, 0))
-	#	self.connection.commit()
 	
-	#def unregisterRabaListTable(self, table_name) :
-	#	sql = 'DELETE FROM rabalist_master WHERE table_name = ?'
-	#	self.connection.cursor().execute(sql, (table_name, ))
-	#	self.connection.commit()
-	
-	def updateRabaListSize(self, table_name, newSize) :
-		sql = "UPDATE rabalist_master SET size = ? WHERE table_name"
-		self.connection.cursor().execute(sql, (newSize, table_name))
+	def registerRabalist(self, anchor_class_name, relation_name) :
+		table_name = self.makeTableName(anchor_class_name, relation_name)
+		
+		self.createTable(table_name, 'id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_id, value_or_id, type')
+		
+		sql = 'INSERT INTO rabalist_master (anchor_class, relation_name, table_name, length) VALUES (?, ?, ?, ?)'
+		cur = self.connection.cursor()
+		cur.execute(sql, (anchor_class_name, relation_name, table_name, 0))
+		id = cur.lastrowid
 		self.connection.commit()
+		return id
 	
-	def getRabaListSize(self, table_name) :
-		sql = 'SELECT size FROM rabalist_master WHERE table_name ?'
+	def unregisterRabalist(self, anchor_class_name, relation_name) :
+		table_name = self.makeTableName(anchor_class_name, relation_name)
+		self.dropTable(table_name)
+		
+		sql = 'DELETE FROM rabalist_master WHERE table_name = ?' 
+		cur = self.connection.cursor()
 		cur.execute(sql, (table_name, ))
-		res = cur.fetchone()
-		if res != None :
-			return res[0]
-		else :
-			return None
-			
-	#def getRabaListTableName(self, anchor_class, relation_name) :
-	#	sql = 'SELECT table_name FROM rabalist_master WHERE anchor_class = ? AND relation_name = ?'
-	#	cur = self.connection.cursor()
-	#	cur.execute(sql, (anchor_class.__name__, relation_name))
-	#	res = cur.fetchone()
-	#	if res != None :
-	#		return res[0]
-	#	else :
-	#		return None
+		cur.commit()
+	
+	def makeTableName(self, anchor_class_name, relation_name) :
+		return 'RabaList_%s_for_%s' % (relation_name, anchor_class_name)
+		
+	def updateRabaListLength(self, theId, newLength) :
+		sql = "UPDATE rabalist_master SET length = ? WHERE id = ?"
+		self.connection.cursor().execute(sql, (newLength, theId))
+		self.connection.commit()
 
 	def getRabaListInfos(self, theId) :
 		sql = 'SELECT * FROM rabalist_master WHERE id = ?'
-		cur.execute(sql, (id, )
+		cur = self.connection.cursor()
+		cur.execute(sql, (theId, ))
 		res = cur.fetchone()
-		return {'id' : res[0], 'anchor_class' : res[1], 'relation_name' : res[2], 'table_name' : res[3])}
+		return {'id' : res[0], 'anchor_class' : res[1], 'relation_name' : res[2], 'table_name' : res[3]}
 	
 	def getRabaListTables(self) :
 		sql = 'SELECT * FROM rabalist_master'
@@ -140,4 +136,4 @@ class RabaConnection(object) :
 		for c in cur :
 			res.append(c[0])
 		
-		return res 
+		return res
