@@ -92,7 +92,7 @@ class RabaConnection(object) :
 			self.tables.add(tableName)
 	
 	def registerRabalist(self, anchor_class_name, relation_name) :
-		table_name = self.makeTableName(anchor_class_name, relation_name)
+		table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
 		
 		self.createTable(table_name, 'id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_id, value_or_id, type')
 		
@@ -104,7 +104,7 @@ class RabaConnection(object) :
 		return id
 	
 	def unregisterRabalist(self, anchor_class_name, relation_name) :
-		table_name = self.makeTableName(anchor_class_name, relation_name)
+		table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
 		self.dropTable(table_name)
 		
 		sql = 'DELETE FROM rabalist_master WHERE table_name = ?' 
@@ -112,7 +112,7 @@ class RabaConnection(object) :
 		cur.execute(sql, (table_name, ))
 		cur.commit()
 	
-	def makeTableName(self, anchor_class_name, relation_name) :
+	def makeRabaListTableName(self, anchor_class_name, relation_name) :
 		return 'RabaList_%s_for_%s' % (relation_name, anchor_class_name)
 		
 	def updateRabaListLength(self, theId, newLength) :

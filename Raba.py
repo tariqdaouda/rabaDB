@@ -59,7 +59,8 @@ class _Raba_MetaClass(type) :
 				for c in cur :
 					if c[1] != 'raba_id' and c[1].lower() not in columnsLower :
 						fieldsToKill.append('%s = NULL' % c[1])
-						print 'UNREGISTER THE RABA LISTS'
+						con.dropTable(con.makeRabaListTableName(name, c))
+						#print 'UNREGISTER THE RABA LISTS'
 						
 					tableColumns.add(c[1].lower())
 	
@@ -162,13 +163,16 @@ class Raba(object):
 			
 			strWhere = strWhere[:-4]
 			sql = 'SELECT * FROM %s WHERE %s' % (self.__class__.__name__, strWhere)
-			#print sql
 			cur = self.connection.cursor()
 			cur.execute(sql, definedValues)
 			res = cur.fetchone()
+			
 			if cur.fetchone() != None :
 				raise KeyError("More than one object fit the arguments you've prodided to the constructor")
 			
+			if 'raba_id' in fieldsSet and res == None :
+				raise KeyError("There's no %s with a raba_id = %s" %(self._rabaClass.__name__, fieldsSet['raba_id']))
+				
 			if res != None :
 				for k, i in self.columns.items() :
 					if k != 'raba_id' :
@@ -180,16 +184,12 @@ class Raba(object):
 								object.__setattr__(self, k, res[i])
 						elif RabaFields.typeIsRabaObject(elmt) :
 							if res[i] != None :
-								print 'tralala', res[i]
 								val = json.loads(res[i])
 								objClass = self.rabaConfiguration.getClass(val["className"])
 								object.__setattr__(self, k, RabaPupa(objClass, val["raba_id"]))
 						elif RabaFields.typeIsRabaList(elmt) :
-							object.__setattr__(self, k, RabaListPupa(self._rabaClass._raba_namespace, res[i]))
-							
-					#else :
-					#	object.__setattr__(self, self.columns[i], res[i])
-		
+							object.__setattr__(self, k, RabaListPupa(namespace = self._rabaClass._raba_namespace, anchorObj = self, id = res[i], relationName = k))
+
 	def autoclean(self) :
 		"""TODO: Copies the table into a new one removing all the collumns that have all their values to NULL
 		and drop the tables that correspond to these tables"""
@@ -451,7 +451,7 @@ class RabaList(list) :
 			self._setNamespaceConAndConf(self[0]._raba_namespace)
 
 	def append(self, v) :
-		print 'popo', v
+		#print 'popo append', v
 		if not self._checkElmt(v) :
 			self._dieInvalidRaba(v)
 		list.append(self, v)
