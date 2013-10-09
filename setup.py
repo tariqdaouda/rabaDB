@@ -101,16 +101,17 @@ class RabaConnection(object) :
 		cur.execute(sql, (anchor_class_name, relation_name, table_name, 0))
 		id = cur.lastrowid
 		self.connection.commit()
-		return id
+		return id, table_name
 	
 	def unregisterRabalist(self, anchor_class_name, relation_name) :
 		table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
+		#print 'unregistering', table_name
 		self.dropTable(table_name)
 		
 		sql = 'DELETE FROM rabalist_master WHERE table_name = ?' 
 		cur = self.connection.cursor()
 		cur.execute(sql, (table_name, ))
-		cur.commit()
+		self.connection.commit()
 	
 	def makeRabaListTableName(self, anchor_class_name, relation_name) :
 		return 'RabaList_%s_for_%s' % (relation_name, anchor_class_name)
@@ -120,12 +121,21 @@ class RabaConnection(object) :
 		self.connection.cursor().execute(sql, (newLength, theId))
 		self.connection.commit()
 
-	def getRabaListInfos(self, theId) :
-		sql = 'SELECT * FROM rabalist_master WHERE id = ?'
-		cur = self.connection.cursor()
-		cur.execute(sql, (theId, ))
+	def getRabaListInfos(self, theId = None, relation_name = None, anchor_class_name = None) :
+		#you must provied either the id, of both relation_name and anchor_class_name
+		if theId != None :
+			sql = 'SELECT * FROM rabalist_master WHERE id = ?'
+			cur = self.connection.cursor()
+			cur.execute(sql, (theId, ))
+		elif relation_name != None and anchor_class_name != None :
+			sql = 'SELECT * FROM rabalist_master WHERE table_name = ?'
+			cur = self.connection.cursor()
+			cur.execute(sql, (self.makeRabaListTableName(anchor_class_name, relation_name), ))
+		
 		res = cur.fetchone()
-		return {'id' : res[0], 'anchor_class' : res[1], 'relation_name' : res[2], 'table_name' : res[3]}
+		if res == None :
+			return None
+		return {'id' : res[0], 'anchor_class' : res[1], 'relation_name' : res[2], 'table_name' : res[3], 'length' : res[4]}
 	
 	def getRabaListTables(self) :
 		sql = 'SELECT * FROM rabalist_master'
