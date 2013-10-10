@@ -1,5 +1,5 @@
 import sqlite3 as sq
-import os, types, cPickle, random, json
+import os, copy, types, cPickle, random, json
 from collections import MutableSequence
 
 from setup import RabaConnection, RabaConfiguration
@@ -295,7 +295,7 @@ class Raba(object):
 		return self.__class__.__name__+str(self.uniqueId)
 	
 	def __repr__(self) :
-		return "<Raba obj: %s, raba_id %s>" % (self._rabaClass.__name__, self.raba_id)
+		return "<Raba obj: %s, raba_id: %s>" % (self._rabaClass.__name__, self.raba_id)
 	
 class RabaListPupa(MutableSequence) :
 	_isRabaList = True
@@ -331,12 +331,21 @@ class RabaListPupa(MutableSequence) :
 		for k in purge :
 			delattr(self, k)
 		
-		RabaMutableSequence.__init__(self, id = id, namespace = namespace, anchorObj = anchObj, tableName = tableName)
+		RabaList.__init__(self, id = id, namespace = namespace, anchorObj = anchObj, tableName = tableName)
 	
 	def __getitem__(self, i) :
 		self._morph()
 		return self[i]
+	 
+	def __delitem__(self, i) :
+		 pass
 	
+	def __setitem__(self, k, v) :
+		pass
+		
+	def insert(k, v) :
+		pass
+	 
 	def __getattribute__(self, name) :
 		if name in MutableSequence.__getattribute__(self, "bypassMutationAttr") :
 			return MutableSequence.__getattribute__(self, name)
@@ -350,7 +359,7 @@ class RabaListPupa(MutableSequence) :
 		return MutableSequence.__getattribute__(self, name)
 
 	def __repr__(self) :
-		return "<RLPupa length: %d, relationName: %s, anchorObj: %s>" % (self.length, self.relationName, self.anchorObj)
+		return "[RLPupa length: %d, relationName: %s, anchorObj: %s]" % (self.length, self.relationName, self.anchorObj)
 
 	def __len__(self) :
 		return self.length
@@ -384,33 +393,45 @@ class RabaList(MutableSequence) :
 		
 		raise TypeError(st)
 	
-	def __init__(self, *argv) :
-		#MutableSequence.__init__(self, *argv)
+	def __init__(self, *listElements, **listArguments) :
+		"""To avoid the check of all elements of listElements during initialisation pass : noInitCheck = True as argument  
+		It is also possible to define both the anchor object and the namespace durint initalisation using argument keywords: anchorObj and namespace. But only do it 
+		if you really now what you are doing."""
+		
 		self.id = None
 		self.relationName = None
 		self.tableName = None
-		self.anchorObj = None
 		
-		self.data = list(argv)
+		if 'anchorObj' in listArguments and listArguments['anchorObj'] != None :
+			self.anchorObj = listArguments['anchorObj']
+		else :
+			self.anchorObj = None
 		
-		check = self._checkRabaList(self)
-		if not check[0]:
-			self._dieInvalidRaba(check[1])
+		if 'namespace' in listArguments and listArguments['namespace'] != None :
+			self.connection = RabaConnection(listArguments['namespace'])
+			self._raba_namespace = listArguments['namespace']
+		else :
+			self.connection = None
+			self._raba_namespace = None
+						
+		if 'noInitCheck' not in listArguments and len(listElements) > 0:
+			check = self._checkRabaList(listElements[0])
+			if not check[0]:
+				self._dieInvalidRaba(check[1])
 		
-		if 'id' in argk and argk['id'] != None :
-			if 'namespace' in argk and argk['namespace'] != None :
-				self.connection = RabaConnection(argk['namespace'])
-				self._raba_namespace = argk['namespace']
-			else :
+		if len(listElements) > 0 :
+			self.data = list(listElements[0])
+		else :
+			self.data = []
+		
+		if 'id' in listArguments and listArguments['id'] != None :
+			if self.connection == None :
 				raise ValueError('Unable to set list, i have an id but no namespace')
 				
-			infos = self.connection.getRabaListInfos(argk['id'])
+			infos = self.connection.getRabaListInfos(listArguments['id'])
 			self.id = infos['id']
 			self.relationName = infos['relation_name']
 			self.tableName = infos['table_name']
-			
-			if 'anchorObj' in argk and argk['anchorObj'] != None :
-				self.anchorObj = argk['anchorObj']
 					
 			cur = self.connection.cursor()
 			cur.execute('SELECT * FROM %s WHERE anchor_id = ?' % self.tableName, (self.anchorObj.raba_id, ))
@@ -424,7 +445,7 @@ class RabaList(MutableSequence) :
 					raise FutureWarning('RabaList in RabaList not supported')
 				else :
 					self.append(RabaPupa(RabaConfiguration(self._raba_namespace).getClass(typ), valueOrId))
-		
+
 	def _setNamespaceConAndConf(self, namespace) :
 		self._raba_namespace = namespace
 		self.connection = RabaConnection(self._raba_namespace)
@@ -453,7 +474,7 @@ class RabaList(MutableSequence) :
 			self._erase(self.relationName , self.anchorObj)
 			
 			values = []
-			for e in self :
+			for e in self.data :
 				if RabaFields.isRabaObject(e) :
 					e.save()
 					values.append((self.anchorObj.raba_id, e.raba_id, e._rabaClass.__name__))
@@ -482,34 +503,44 @@ class RabaList(MutableSequence) :
 		check = self._checkRabaList(v)
 		if not check[0]:
 			self._dieInvalidRaba(check[1])
-		MutableSequence.extend(self, v)
+		
+		self.data.extend(v)
 		if self._raba_namespace == None :
 			self._setNamespaceConAndConf(self[0]._raba_namespace)
 
 	def append(self, v) :	
 		if not self._checkElmt(v) :
 			self._dieInvalidRaba(v)
-		MutableSequence.append(self, v)
+		
+		self.data.append(v)
 		if self._raba_namespace == None :
 			self._setNamespaceConAndConf(self[0]._raba_namespace)
 		
 	def insert(self, k, v) :
 		if not self._checkElmt(v) :
 			self._dieInvalidRaba(v)
-		MutableSequence.insert(self, k, v)
+		
+		self.data.insert(k, v)
 		if self._raba_namespace == None :
 			self._setNamespaceConAndConf(self[0]._raba_namespace)
+	
+	def __delitem__(self, i) :
+		del self.data[i]
 	
 	def __setitem__(self, k, v) :
 		if self._checkElmt(v) :
 			self._dieInvalidRaba(v)
-		MutableSequence.__setitem__(self, k, v)
-
-	def _getitem_bypass(self, k) :
-		return self[k]
-	
+		self.data[k] = v
+		
 	def __getitem__(self, i) :
-		return RabaList(*self.data[i])
+		
+		try :
+			return RabaList(self.data[i], namespace = self._raba_namespace, noInitCheck = True)
+		except TypeError:
+			return self.data[i]
+	
+	def __len__(self) :
+		return len(self.data)
 			
 	def __repr__(self) :
-		return '<RL'+MutableSequence.__repr__(self)+'>'
+		return '[RL %s]' % str(self.data)

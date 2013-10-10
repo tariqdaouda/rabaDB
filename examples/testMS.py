@@ -3,8 +3,7 @@ import collections
 class A(collections.MutableSequence):
 
     def __init__(self, *args):
-        self.list = list()
-        self.extend(list(args))
+        self.list = list(args)
 
     def __len__(self): return len(self.list)
 
@@ -28,4 +27,4 @@ class A(collections.MutableSequence):
 s = A(1,2,3)
 # lots of free methods
 s[0] = 3
-print type(s), type(s[1:2]), s[1:2], s[0]#len(s), bool(s), s.count(3), s.index(2), iter(s)
+print s, type(s), type(s[1:2]), s[1:2], s[0]#len(s), bool(s), s.count(3), s.index(2), iter(s)

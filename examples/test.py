@@ -5,7 +5,7 @@ from rabaDB.fields import *
 from rabaDB.filters import *
 
 def constF(v, k) :
-	print k
+	#print k
 	return True
 
 class Gene(Raba) :
@@ -26,13 +26,17 @@ class Chromosome(Raba) :
 
 c = Chromosome(raba_id = 1)
 #print c.snps, len(c.snps), c.raba_id
+
+print '---->', c.snps, c.snps[3:], type(c.snps[3:])
+print '---->', c.snps, c.snps[3:][::-1], type(c.snps[3:]), c.snps[3]
 #c.snps = RabaList(range(10))
-c.snps.append(5)
+#c.snps.append(5)
+#print c.snps, type(c.snps[0]), type(c.snps[3:]), c.snps[3:]
 #c.snps.append(Gene())
-print '---->', type(c.snps[3])
+#print '---->', c.snps, c.snps[3:], type(c.snps[3:])
 #c.snps = RabaList()
 #print '---->', c.snps
 #print "in chromo", c.genes
 #c.genes.append(Gene())
 #print '+++', c.genes, c.genes[0].name
-c.save()
+#c.save()
