@@ -64,14 +64,9 @@ class RabaObjectField(RabaField) :
 	def __repr__(self) :
 		return '<field %s, class: %s , default: %s>' % (self.__class__.__name__, self.objClassName, self.default)
 
-def isRabaObject(v) :
-	return hasattr(v, '_rabaClass')
 	
 def isField(v) :
 	return hasattr(v.__class__, '_raba_field') and v.__class__._raba_field
-	
-def isRabaList(v) :
-	return hasattr(v.__class__, '_raba_list') and v.__class__._raba_list
 
 def typeIsPrimitive(v) :
 	return hasattr(v.__class__, '_raba_type') and v.__class__._raba_type == RABA_FIELD_TYPE_IS_PRIMITIVE

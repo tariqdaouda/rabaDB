@@ -5,6 +5,12 @@ from collections import MutableSequence
 from setup import RabaConnection, RabaConfiguration
 import fields as RabaFields
 
+def isRabaObject(v) :
+	return hasattr(v, '_rabaClass')
+	
+def isRabaList(v) :
+	return hasattr(v.__class__, '_raba_list') and v.__class__._raba_list
+
 class _Raba_MetaClass(type) :
 	
 	def __new__(cls, name, bases, dct) :
@@ -217,7 +223,7 @@ class Raba(object):
 		for k, valType in self.__class__.__dict__.items() :
 			if RabaFields.isField(valType) and k != 'raba_id':
 				val = getattr(self, k)
-				if not RabaFields.isRabaList(valType) :
+				if not isRabaList(valType) :
 					if val == valType.default :
 						values.append(val)
 						fields.append(k)
@@ -263,7 +269,7 @@ class Raba(object):
 		
 	def __setattr__(self, k, v) :
 		if hasattr(self.__class__, k) and RabaFields.isField(getattr(self.__class__, k)) :
-			if not RabaFields.isRabaList(getattr(self.__class__, k)) :
+			if not isRabaList(getattr(self.__class__, k)) :
 				classType = getattr(self.__class__, k)
 				if not classType.check(v) :
 					raise ValueError("Unable to set '%s' to value '%s'. Constrain function violation" % (k, v))
@@ -278,7 +284,7 @@ class Raba(object):
 	
 	def __getattribute__(self, k) :
 		elmt = object.__getattribute__(self, k)
-		if RabaFields.isRabaList(elmt) :
+		if isRabaList(elmt) :
 			elmt = RabaListPupa(self.__class__._raba_namespace, anchorObj = self, relationName = k,)
 		elif RabaFields.isField(elmt) :
 			elmt = elmt.default
@@ -338,13 +344,16 @@ class RabaListPupa(MutableSequence) :
 		return self[i]
 	 
 	def __delitem__(self, i) :
-		 pass
+		self._morph()
+		self.__delitem__(i)
 	
 	def __setitem__(self, k, v) :
-		pass
-		
-	def insert(k, v) :
-		pass
+		self._morph()
+		self.__setitem__(k, v)
+			
+	def insert(k, i, v) :
+		self._morph()
+		self.insert(i, v)
 	 
 	def __getattribute__(self, name) :
 		if name in MutableSequence.__getattribute__(self, "bypassMutationAttr") :
@@ -370,21 +379,25 @@ class RabaList(MutableSequence) :
 	
 	_isRabaList = True
 	
-	def _checkElmt(self, v) :
+	def _checkElmt(self, v, namespace = None) :
 		if self.anchorObj != None and self.relationName != None and not getattr(self.anchorObj._rabaClass, self.relationName).check(v) :
 			return False
-				
-		if not RabaFields.isRabaObject(v) or self._raba_namespace == None or (self._raba_namespace != None and v._raba_namespace == self._raba_namespace) :
+			
+		if not isRabaObject(v) or namespace == None or (namespace != None and v._raba_namespace == namespace) :
 			return True
 		
 		return False
 		
-	def _checkRabaList(self, v) :
-		#vv = list(v)
+	def _checkRabaList(self, v, namespace = None) :
+		"""Checks and entire list, returns (faultyElmt, list namespace), if the list passes the check, faultyElmt = None"""
+		nm = namespace
 		for e in v :
-			if not self._checkElmt(e) :
-				return (False, e)
-		return (True, None)
+			if nm == None and isRabaObject(e) :
+				nm = e._raba_namespace
+			if not self._checkElmt(e, nm) :
+				return (e, nm)
+		
+		return (None, nm)
 	
 	def _dieInvalidRaba(self, v) :
 		st = """The element %s can't be added to the list, possible causes:
@@ -413,12 +426,18 @@ class RabaList(MutableSequence) :
 		else :
 			self.connection = None
 			self._raba_namespace = None
-						
+		
 		if 'noInitCheck' not in listArguments and len(listElements) > 0:
-			check = self._checkRabaList(listElements[0])
-			if not check[0]:
+			faultyElement, namespace = self._checkRabaList(listElements[0])
+			if faultyElement != None :
 				self._dieInvalidRaba(check[1])
 		
+			if self._raba_namespace != None and namespace != None and namespace != self._raba_namespace :
+				raise TypeError("Defined namespace %s != elements namespace %s") %(self._raba_namespace, namespace)
+			elif self._raba_namespace == None :
+				self._raba_namespace = namespace
+			
+			
 		if len(listElements) > 0 :
 			self.data = list(listElements[0])
 		else :
@@ -427,29 +446,23 @@ class RabaList(MutableSequence) :
 		if 'id' in listArguments and listArguments['id'] != None :
 			if self.connection == None :
 				raise ValueError('Unable to set list, i have an id but no namespace')
-				
+			
 			infos = self.connection.getRabaListInfos(listArguments['id'])
 			self.id = infos['id']
 			self.relationName = infos['relation_name']
 			self.tableName = infos['table_name']
-					
+			
 			cur = self.connection.cursor()
 			cur.execute('SELECT * FROM %s WHERE anchor_id = ?' % self.tableName, (self.anchorObj.raba_id, ))
 			for aidi in cur :
 				valueOrId = aidi[2]
 				typ = aidi[3]
-				#print aidi, id. anchor_id, value_or_id, type
 				if typ == RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE :
 					self.append(valueOrId)
-				elif typ ==  RabaFields.RABA_FIELD_TYPE_IS_RABA_LIST :
+				elif typ == RabaFields.RABA_FIELD_TYPE_IS_RABA_LIST :
 					raise FutureWarning('RabaList in RabaList not supported')
 				else :
 					self.append(RabaPupa(RabaConfiguration(self._raba_namespace).getClass(typ), valueOrId))
-
-	def _setNamespaceConAndConf(self, namespace) :
-		self._raba_namespace = namespace
-		self.connection = RabaConnection(self._raba_namespace)
-		self.configuration = RabaConfiguration(self._raba_namespace)
 		
 	def pupatizeElements(self) :
 		"""Transform all raba object into pupas"""
@@ -475,7 +488,7 @@ class RabaList(MutableSequence) :
 			
 			values = []
 			for e in self.data :
-				if RabaFields.isRabaObject(e) :
+				if isRabaObject(e) :
 					e.save()
 					values.append((self.anchorObj.raba_id, e.raba_id, e._rabaClass.__name__))
 				elif RabaFields.isPythonPrimitive(e) :
@@ -498,42 +511,53 @@ class RabaList(MutableSequence) :
 		
 	def pupa(self) :
 		return RabaListPupa(self.namespace, self.anchorObj, self.relationName)
+	
+	def _setNamespaceConAndConf(self, namespace) :
+		self._raba_namespace = namespace
+		self.connection = RabaConnection(self._raba_namespace)
+		self.configuration = RabaConfiguration(self._raba_namespace)
 		
 	def extend(self, v) :
-		check = self._checkRabaList(v)
-		if not check[0]:
-			self._dieInvalidRaba(check[1])
+		faultyElement, namespace = self._checkRabaList(v, self._raba_namespace)
+		print faultyElement, namespace, v
+		if faultyElement != None:
+			self._dieInvalidRaba(faultyElement)
 		
 		self.data.extend(v)
-		if self._raba_namespace == None :
-			self._setNamespaceConAndConf(self[0]._raba_namespace)
+		if self._raba_namespace == None and namespace != None :
+			self._setNamespaceConAndConf(namespace)
 
-	def append(self, v) :	
-		if not self._checkElmt(v) :
+	def append(self, v) :
+		if not self._checkElmt(v, self._raba_namespace) :
 			self._dieInvalidRaba(v)
 		
+		if self._raba_namespace == None and isRabaObject(v) :
+			self._setNamespaceConAndConf(v._raba_namespace)
+
 		self.data.append(v)
-		if self._raba_namespace == None :
-			self._setNamespaceConAndConf(self[0]._raba_namespace)
-		
+	
 	def insert(self, k, v) :
-		if not self._checkElmt(v) :
+		if not self._checkElmt(v, self._raba_namespace) :
 			self._dieInvalidRaba(v)
 		
+		if self._raba_namespace == None and isRabaObject(v) :
+			self._setNamespaceConAndConf(v._raba_namespace)
+
 		self.data.insert(k, v)
-		if self._raba_namespace == None :
-			self._setNamespaceConAndConf(self[0]._raba_namespace)
+	
+	def __setitem__(self, k, v) :
+		if not self._checkElmt(v, self._raba_namespace) :
+			self._dieInvalidRaba(v)
+			
+		if self._raba_namespace == None and isRabaObject(v) :
+			self._setNamespaceConAndConf(v._raba_namespace)
+		
+		self.data[k] = v
 	
 	def __delitem__(self, i) :
 		del self.data[i]
 	
-	def __setitem__(self, k, v) :
-		if self._checkElmt(v) :
-			self._dieInvalidRaba(v)
-		self.data[k] = v
-		
 	def __getitem__(self, i) :
-		
 		try :
 			return RabaList(self.data[i], namespace = self._raba_namespace, noInitCheck = True)
 		except TypeError:

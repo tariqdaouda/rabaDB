@@ -29,6 +29,11 @@ c = Chromosome(raba_id = 1)
 
 print '---->', c.snps, c.snps[3:], type(c.snps[3:])
 print '---->', c.snps, c.snps[3:][::-1], type(c.snps[3:]), c.snps[3]
+a = RabaList(range(10))
+a.append(555)
+g = Gene()
+a.extend([33, 33, 33, g])
+print a, a._raba_namespace, g._rabaClass
 #c.snps = RabaList(range(10))
 #c.snps.append(5)
 #print c.snps, type(c.snps[0]), type(c.snps[3:]), c.snps[3:]
