@@ -1,5 +1,7 @@
 import sqlite3 as sq
 import os, types, cPickle, random, json
+from collections import MutableSequence
+
 from setup import RabaConnection, RabaConfiguration
 import fields as RabaFields
 
@@ -16,8 +18,12 @@ class _Raba_MetaClass(type) :
 					fields.append(k)
 					columns[k.lower()] = -1
 					columnsToLowerCase[k.lower()] = k
-					
-			con = RabaConnection(dct['_raba_namespace'])
+			
+			try :
+				con = RabaConnection(dct['_raba_namespace'])
+			except KeyError :
+				raise ValueError("The class %s has no defined namespace, please add a valid '_raba_namespace' to class attributes" % name)
+				
 			uniqueStr = ''
 			if '_raba_uniques' in dct :
 				for c in dct['_raba_uniques'] :
@@ -82,7 +88,7 @@ class _Raba_MetaClass(type) :
 			cls.__getattr__ = _class_getAttr
 		
 			columns['raba_id'] = 0
-			dct['raba_id'] = RabaFields.Primitive()
+			dct['raba_id'] = RabaFields.PrimitiveField()
 			dct['columns'] = columns
 			dct['columnsToLowerCase'] = columnsToLowerCase
 			
@@ -195,10 +201,10 @@ class Raba(object):
 							object.__setattr__(self, k, RabaListPupa(self.__class__._raba_namespace, anchorObj = self, relationName = k))
 
 	def autoclean(self) :
-		"""TODO: Copies the table into a new one removing all the collumns that have all their values to NULL
+		"""TODO: Copies the table into a new one droping all the collumns that have all their values to NULL
 		and drop the tables that correspond to these tables"""
-		pass
-	
+		raise FutureWarning("sqlite does not support column droping, work aroun not implemented yet")
+		
 	def pupa(self) :
 		"""returns a pupa version of self"""
 		return RabaPupa(self.__class__, self.raba_id)
@@ -291,7 +297,7 @@ class Raba(object):
 	def __repr__(self) :
 		return "<Raba obj: %s, raba_id %s>" % (self._rabaClass.__name__, self.raba_id)
 	
-class RabaListPupa(list) :
+class RabaListPupa(MutableSequence) :
 	_isRabaList = True
 	
 	def __init__(self, namespace, anchorObj, relationName) :
@@ -313,35 +319,35 @@ class RabaListPupa(list) :
 			self.length = 0
 		
 	def _morph(self) :
-		list.__setattr__(self, '__class__', RabaList)
+		MutableSequence.__setattr__(self, '__class__', RabaList)
 		
-		relName = list.__getattribute__(self, 'relationName')
-		anchObj = list.__getattribute__(self, 'anchorObj')
-		namespace = list.__getattribute__(self, '_raba_namespace')
-		tableName = list.__getattribute__(self, 'tableName')
-		id = list.__getattribute__(self, 'id')
+		relName = MutableSequence.__getattribute__(self, 'relationName')
+		anchObj = MutableSequence.__getattribute__(self, 'anchorObj')
+		namespace = MutableSequence.__getattribute__(self, '_raba_namespace')
+		tableName = MutableSequence.__getattribute__(self, 'tableName')
+		id = MutableSequence.__getattribute__(self, 'id')
 		
-		purge = list.__getattribute__(self, '__dict__').keys()
+		purge = MutableSequence.__getattribute__(self, '__dict__').keys()
 		for k in purge :
 			delattr(self, k)
 		
-		RabaList.__init__(self, id = id, namespace = namespace, anchorObj = anchObj, tableName = tableName)
+		RabaMutableSequence.__init__(self, id = id, namespace = namespace, anchorObj = anchObj, tableName = tableName)
 	
 	def __getitem__(self, i) :
 		self._morph()
 		return self[i]
-		
+	
 	def __getattribute__(self, name) :
-		if name in list.__getattribute__(self, "bypassMutationAttr") :
-			return list.__getattribute__(self, name)
+		if name in MutableSequence.__getattribute__(self, "bypassMutationAttr") :
+			return MutableSequence.__getattribute__(self, name)
 		
-		relName = list.__getattribute__(self, 'relationName')
-		anchObj = list.__getattribute__(self, 'anchorObj')
-		list.__getattribute__(self, "_morph")()
+		relName = MutableSequence.__getattribute__(self, 'relationName')
+		anchObj = MutableSequence.__getattribute__(self, 'anchorObj')
+		MutableSequence.__getattribute__(self, "_morph")()
 		
 		anchObj.__setattr__(relName, self)
 		
-		return list.__getattribute__(self, name)
+		return MutableSequence.__getattribute__(self, name)
 
 	def __repr__(self) :
 		return "<RLPupa length: %d, relationName: %s, anchorObj: %s>" % (self.length, self.relationName, self.anchorObj)
@@ -349,30 +355,44 @@ class RabaListPupa(list) :
 	def __len__(self) :
 		return self.length
 		
-class RabaList(list) :
+class RabaList(MutableSequence) :
 	"""A RabaList is a list that can only contain Raba objects of the same class or (Pupas of the same class). They represent one to many relations and are stored in separate
 	tables that contain only one single line"""
 	
 	_isRabaList = True
 	
 	def _checkElmt(self, v) :
+		if self.anchorObj != None and self.relationName != None and not getattr(self.anchorObj._rabaClass, self.relationName).check(v) :
+			return False
+				
 		if not RabaFields.isRabaObject(v) or self._raba_namespace == None or (self._raba_namespace != None and v._raba_namespace == self._raba_namespace) :
 			return True
 		
 		return False
 		
 	def _checkRabaList(self, v) :
-		vv = list(v)
-		for e in vv :
+		#vv = list(v)
+		for e in v :
 			if not self._checkElmt(e) :
 				return (False, e)
 		return (True, None)
 	
 	def _dieInvalidRaba(self, v) :
-		raise TypeError('Only Raba objects of the same namespace can be stored in the same Raba List. List namespace is: %s, object: %s' % self._raba_namespace, v._raba_namespace)
+		st = """The element %s can't be added to the list, possible causes:
+		-The element is a RabaObject wich namespace is different from list's namespace
+		-The element violates the constraint function""" % v
+		
+		raise TypeError(st)
 	
-	def __init__(self, *argv, **argk) :
-		list.__init__(self, *argv)
+	def __init__(self, *argv) :
+		#MutableSequence.__init__(self, *argv)
+		self.id = None
+		self.relationName = None
+		self.tableName = None
+		self.anchorObj = None
+		
+		self.data = list(argv)
+		
 		check = self._checkRabaList(self)
 		if not check[0]:
 			self._dieInvalidRaba(check[1])
@@ -404,12 +424,7 @@ class RabaList(list) :
 					raise FutureWarning('RabaList in RabaList not supported')
 				else :
 					self.append(RabaPupa(RabaConfiguration(self._raba_namespace).getClass(typ), valueOrId))
-		else :
-			self.id = None
-			self.relationName = None
-			self.tableName = None
-			self.anchorObj = None
-			
+		
 	def _setNamespaceConAndConf(self, namespace) :
 		self._raba_namespace = namespace
 		self.connection = RabaConnection(self._raba_namespace)
@@ -467,28 +482,34 @@ class RabaList(list) :
 		check = self._checkRabaList(v)
 		if not check[0]:
 			self._dieInvalidRaba(check[1])
-		list.extend(self, v)
+		MutableSequence.extend(self, v)
 		if self._raba_namespace == None :
 			self._setNamespaceConAndConf(self[0]._raba_namespace)
 
-	def append(self, v) :
+	def append(self, v) :	
 		if not self._checkElmt(v) :
 			self._dieInvalidRaba(v)
-		list.append(self, v)
+		MutableSequence.append(self, v)
 		if self._raba_namespace == None :
 			self._setNamespaceConAndConf(self[0]._raba_namespace)
 		
 	def insert(self, k, v) :
 		if not self._checkElmt(v) :
 			self._dieInvalidRaba(v)
-		list.insert(self, k, v)
+		MutableSequence.insert(self, k, v)
 		if self._raba_namespace == None :
 			self._setNamespaceConAndConf(self[0]._raba_namespace)
 	
 	def __setitem__(self, k, v) :
 		if self._checkElmt(v) :
 			self._dieInvalidRaba(v)
-		list.__setitem__(self, k, v)
+		MutableSequence.__setitem__(self, k, v)
 
+	def _getitem_bypass(self, k) :
+		return self[k]
+	
+	def __getitem__(self, i) :
+		return RabaList(*self.data[i])
+			
 	def __repr__(self) :
-		return '<RL'+list.__repr__(self)+'>'
+		return '<RL'+MutableSequence.__repr__(self)+'>'

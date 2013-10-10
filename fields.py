@@ -10,34 +10,34 @@ class RabaField(object) :
 	_raba_list = False
 	_raba_type = RABA_FIELD_TYPE_IS_UNDEFINED
 	
-	def __init__(self, default = None, constrainFct = None, *constrainFctArgs, **constrainFctWArgs) :
+	def __init__(self, default = None, constrainFct = None, **constrainFctWArgs) :
 		if self.__class__ == 'RabaField' :
 			raise ValueError("RabaField is abstract and should not be instanciated, Instanciate one of it's children")
 		
 		self.default = default
 		self.constrainFct = constrainFct
-		self.constrainFctArgs = constrainFctArgs
 		self.constrainFctWArgs = constrainFctWArgs
 		
 	def check(self, val) :
 		if self.constrainFct == None :
 			return True
 		
-		return self.constrainFct(val, *self.constrainFctArgs, **self.constrainFctWArgs)
+		return self.constrainFct(val, **self.constrainFctWArgs)
 
-class List(object) :
+class RabaListField(RabaField) :
 	_raba_field = True
 	_raba_list = True
 	_raba_type = RABA_FIELD_TYPE_IS_RABA_LIST
 
-	def __init__(self) :
-		self.default = None
-	
-class Primitive(RabaField) :
+	def __init__(self, ElmtConstrainFct = None, **ElmtConstrainFctWArgs) :
+		RabaField.__init__(self, default = None, constrainFct = ElmtConstrainFct, **ElmtConstrainFctWArgs)
+		del(self.default)
+		
+class PrimitiveField(RabaField) :
 	_raba_type = RABA_FIELD_TYPE_IS_PRIMITIVE
 	
-	def __init__(self, default = None, constrainFct = None, *constrainFctArgs, **constrainFctWArgs) :
-		RabaField.__init__(self,  default, constrainFct, *constrainFctArgs, **constrainFctWArgs)
+	def __init__(self, default = None, constrainFct = None, **constrainFctWArgs) :
+		RabaField.__init__(self,  default, constrainFct, **constrainFctWArgs)
 	
 	def check(self, val) :
 		return RabaField.check(self, val)
@@ -45,15 +45,15 @@ class Primitive(RabaField) :
 	def __repr__(self) :
 		return '<field %s, default: %s>' % (self.__class__.__name__, self.default)
 		
-class RabaObject(RabaField) :
+class RabaObjectField(RabaField) :
 	_raba_type = RABA_FIELD_TYPE_IS_RABA_OBJECT
 	
-	def __init__(self, objClassName = None, default = None, constrainFct = None, *constrainFctArgs, **constrainFctWArgs) :
+	def __init__(self, objClassName = None, default = None, constrainFct = None, **constrainFctWArgs) :
 		
 		if default != None and not isRabaObject(default) :
 			raise ValueError("Default value is not a valid Raba Object")
 		
-		RabaField.__init__(self,  default, constrainFct, *constrainFctArgs, **constrainFctWArgs)
+		RabaField.__init__(self,  default, constrainFct, **constrainFctWArgs)
 		self.objClassName = objClassName
 		
 	def check(self, val) :
