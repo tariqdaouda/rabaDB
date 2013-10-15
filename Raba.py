@@ -31,7 +31,7 @@ class _RabaPupaSingleton_Metaclass(type):
 		key = makeSingletonKey(cls, raba_id)
 		if key in _Raba_MetaClass._instances :
 			return _Raba_MetaClass._instances[key]
-		elif key not in clsObj._instances:
+		elif key not in clsObj._instances :
 			clsObj._instances[key] = super(_RabaPupaSingleton_Metaclass, clsObj).__call__(*args, **kwargs)
 		
 		return clsObj._instances[key]
@@ -193,15 +193,17 @@ class _Raba_MetaClass(type) :
 							object.__setattr__(obj, k, RabaListPupa(cls._raba_namespace, anchorObj =  obj, relationName = k))
 				else :
 					obj = super(_Raba_MetaClass, cls).__call__(**fieldsSet)
-					cls._instances[key] = obj
 					
 					for k, v in fieldsSet.items() :
 						if k.lower() in cls.columns : 
-							object.__setattr__(self, k, v)
+							object.__setattr__(obj, k, v)
 				
+					if 'raba_id' in fieldsSet :
+						key = makeSingletonKey(cls, fieldsSet['raba_id'])
+						cls._instances[key] = obj
+					
 				obj.connection = connection
 				obj.rabaConfiguration = rabaConfiguration
-				cls._instances[key] = obj
 				return obj
 		
 		super(_Raba_MetaClass, cls).__call__(**fieldsSet)
@@ -260,6 +262,7 @@ class Raba(object):
 		
 		self.connection = RabaConnection(self._rabaClass._raba_namespace)
 		self.rabaConfiguration =  RabaConfiguration(self._rabaClass._raba_namespace)
+		
 		"""#self.columns = self.__class__.columns
 		
 		#Initialisation
@@ -358,7 +361,10 @@ class Raba(object):
 			if self.raba_id == None :
 				sql = 'INSERT INTO %s (%s) VALUES (%s)' % (self.__class__.__name__, ','.join(fields), ','.join(['?' for i in range(len(fields))]))
 				cur.execute(sql, values)
-				self.raba_id = cur.lastrowid
+				object.__setattr__(self, 'raba_id', cur.lastrowid)
+				key = makeSingletonKey(self._rabaClass, self.raba_id)
+				_Raba_MetaClass._instances[key] = self
+				#_Raba_MetaClass.registerRabaObject(self, self.raba_id)
 			else :
 				values.append(self.raba_id)
 				sql = 'UPDATE %s SET %s = ? WHERE raba_id = ?' % (self.__class__.__name__, ' = ?, '.join(fields))
@@ -378,6 +384,9 @@ class Raba(object):
 		return  {'type' : RabaFields.RABA_FIELD_TYPE_IS_RABA_OBJECT, 'className' : self._rabaClass.__name__, 'raba_id' : self.raba_id}
 		
 	def __setattr__(self, k, v) :
+		if k == 'raba_id' :
+			raise ValueError("It's forbidden to manualy set the raba_id" )
+			
 		if hasattr(self.__class__, k) and RabaFields.isField(getattr(self.__class__, k)) :
 			if not isRabaList(getattr(self.__class__, k)) :
 				classType = getattr(self.__class__, k)
