@@ -11,7 +11,29 @@ def isRabaObject(v) :
 def isRabaList(v) :
 	return hasattr(v.__class__, '_raba_list') and v.__class__._raba_list
 
+
+class RabaPupaSingletonMetaclass(type):
+	_instances = {}
+	def __call__(cls, *args, **kwargs):
+		if 'classObj' in kwargs :
+			clsObj = kwargs['classObj'].__name__
+		else :
+			clsObj = args[0].__name__
+			
+		if 'raba_id' in kwargs :
+			raba_id = kwargs['raba_id']
+		else :
+			raba_id = args[0]
+		
+		key = '%s%d' % (clsObj, raba_id)
+		if key not in cls._instances:
+			cls._instances[key] = super(RabapPupaSingleton, cls).__call__(*args, **kwargs)
+		
+		return cls._instances[key]
+
 class _Raba_MetaClass(type) :
+	
+	_instances = {}
 	
 	def __new__(cls, name, bases, dct) :
 		if name != 'Raba' :
@@ -113,11 +135,14 @@ class RabaPupa(object) :
 	For a pupa self._rabaClass refers to the class of the object "inside" the pupa.
 	"""
 	
-	def __init__(self, classObj, uniqueId) :
+	__metaclass__ = RabaPupaSingletonMetaclass
+	
+	def __init__(self, classObj, raba_id) :
 		self._rabaClass = classObj
-		self.raba_id = uniqueId
+		self.raba_id = raba_id
+		self._raba_namespace = classObj._raba_namespace
 		self.__doc__ = classObj.__doc__
-		self.bypassMutationAttr = set(['_rabaClass', 'raba_id', '__class__', '__doc__'])
+		self.bypassMutationAttr = set(['_rabaClass', 'raba_id', '_raba_namespace', '_rabaClass', '__class__', '__doc__'])
 		
 	def __getattribute__(self, name) :
 		def getAttr(name) :
@@ -190,21 +215,21 @@ class Raba(object):
 			if res != None :
 				for kk, i in self.columns.items() :
 					k = self.columnsToLowerCase[kk]
-					if k != 'raba_id' :
-						elmt = getattr(self.__class__, k)
-						if RabaFields.typeIsPrimitive(elmt) :
-							try :
-								object.__setattr__(self, k, cPickle.loads(str(res[i])))
-							except :
-								object.__setattr__(self, k, res[i])
-						elif RabaFields.typeIsRabaObject(elmt) :
-							if res[i] != None :
-								val = json.loads(res[i])
-								#print '----', elmt, val, i, res[i]
-								objClass = self.rabaConfiguration.getClass(val["className"])
-								object.__setattr__(self, k, RabaPupa(objClass, val["raba_id"]))
-						elif RabaFields.typeIsRabaList(elmt) :
-							object.__setattr__(self, k, RabaListPupa(self.__class__._raba_namespace, anchorObj = self, relationName = k))
+					#if k != 'raba_id' :
+					elmt = getattr(self.__class__, k)
+					if RabaFields.typeIsPrimitive(elmt) :
+						try :
+							object.__setattr__(self, k, cPickle.loads(str(res[i])))
+						except :
+							object.__setattr__(self, k, res[i])
+					elif RabaFields.typeIsRabaObject(elmt) :
+						if res[i] != None :
+							val = json.loads(res[i])
+							#print '----', elmt, val, i, res[i]
+							objClass = self.rabaConfiguration.getClass(val["className"])
+							object.__setattr__(self, k, RabaPupa(objClass, val["raba_id"]))
+					elif RabaFields.typeIsRabaList(elmt) :
+						object.__setattr__(self, k, RabaListPupa(self.__class__._raba_namespace, anchorObj = self, relationName = k))
 
 	def autoclean(self) :
 		"""TODO: Copies the table into a new one droping all the collumns that have all their values to NULL
@@ -244,7 +269,8 @@ class Raba(object):
 				else :
 					if val != None and (val.__class__ is RabaList or val.__class__ is RabaListPupa)  :
 						val._save()
-						values.append('%s, len:%d' %(val.tableName, len(val)))
+						#values.append('%s, len:%d' %(val.tableName, len(val)))
+						values.append(len(val))
 						fields.append(k)
 					else :
 						raise ValueError("Unable to set '%s' to value '%s' because it is not a valid RabaList" % (k, val))
@@ -263,6 +289,11 @@ class Raba(object):
 		
 		self.connection.commit()
 
+	def copy(self) :
+		v = copy.copy(self)
+		v.raba_id = None
+		return v
+	
 	def getDctDescription(self) :
 		"returns a dict sumarily describing the object"
 		return  {'type' : RabaFields.RABA_FIELD_TYPE_IS_RABA_OBJECT, 'className' : self._rabaClass.__name__, 'raba_id' : self.raba_id}
@@ -341,6 +372,7 @@ class RabaListPupa(MutableSequence) :
 	
 	def __getitem__(self, i) :
 		self._morph()
+		print self
 		return self[i]
 	 
 	def __delitem__(self, i) :
@@ -368,7 +400,7 @@ class RabaListPupa(MutableSequence) :
 		return MutableSequence.__getattribute__(self, name)
 
 	def __repr__(self) :
-		return "[RLPupa length: %d, relationName: %s, anchorObj: %s]" % (self.length, self.relationName, self.anchorObj)
+		return "[RLPupa length: %d, relationName: %s, anchorObj: %s, id: %d]" % (self.length, self.relationName, self.anchorObj, self.id)
 
 	def __len__(self) :
 		return self.length
@@ -463,7 +495,7 @@ class RabaList(MutableSequence) :
 					raise FutureWarning('RabaList in RabaList not supported')
 				else :
 					self.append(RabaPupa(RabaConfiguration(self._raba_namespace).getClass(typ), valueOrId))
-		
+					
 	def pupatizeElements(self) :
 		"""Transform all raba object into pupas"""
 		for i in range(len(self)) :

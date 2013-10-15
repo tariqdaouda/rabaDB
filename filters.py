@@ -33,6 +33,7 @@ class RabaQuery :
 				pass
 			else :
 				resFct = self._parseFct(strFilters[i])
+				print resFct
 				if resFct != None :
 					 strFilters[i] = resFct
 				else :
@@ -41,7 +42,7 @@ class RabaQuery :
 		self.filters.append(strFilters)
 	
 	def _parseFct(self, wholeStr) :
-
+		
 		match = self.fctPattern.match(wholeStr)
 		if match == None :
 			return None
@@ -53,10 +54,11 @@ class RabaQuery :
 
 		if not hasattr(self.rabaType, field) :
 			raise KeyError("RabaQuery Error: type '%s' has no field %s" % (self.rabaType.__name__, field))
-		if not isRabaType(getattr(self.rabaType, field)) :
+		if not isRabaList(getattr(self.rabaType, field)) :
 			raise TypeError("RabaQuery Error: the parameter of '%s' must a be RabaType" % fctName.upper())
 		
 		if fctName.lower() == 'count' :
+			#print '%s %s %s' % (field, operator, value)
 			return '%s %s %s' % (field, operator, value)
 		else :
 			raise ValueError("RabaQuery Error: Unknown function %s" % fctName.upper())
@@ -83,7 +85,7 @@ class RabaQuery :
 			sqlFilters.append('(%s)' % ' AND '.join(f))
 			
 		sqlFilters = ' OR '.join(sqlFilters)
-		sql = 'SELECT id from %s WHERE %s' % (self.rabaType.__name__, sqlFilters)
+		sql = 'SELECT raba_id from %s WHERE %s' % (self.rabaType.__name__, sqlFilters)
 		#print sql
 		cur = self.con.cursor()
 		cur.execute(sql)

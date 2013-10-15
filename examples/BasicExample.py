@@ -7,34 +7,33 @@ from rabaDB.fields import *
 class Gene(Raba) :
 	_raba_namespace = 'test'
 	name = PrimitiveField(default = '')
-	def __init__(self, name, **fieldsSet) :
+	def __init__(self, **fieldsSet) :
 		Raba.__init__(self, **fieldsSet)
-		self.name = name
 
 class Chromosome(Raba) :
 	_raba_namespace = 'test'
 	id = PrimitiveField(default = '')
 	genes = RabaListField()
-	def __init__(self, uniqueId, **fieldsSet) :
+	def __init__(self, **fieldsSet) :
 		Raba.__init__(self, **fieldsSet)
-		self.id = uniqueId
 		
 #Create a gene
-gene = Gene('TPST2')
+gene = Gene(name = 'TPST2')
 #Create a chromosome
-chro = Chromosome('22')
+chro = Chromosome(id = '22')
 #Add the gene to the chromosome
 chro.genes.append(gene)
-print chro.genes[-1].name
-print chro.genes
+chro.genes.append(Gene(name = 'TPST2_2'))
+#print chro.genes[-1].name
+#print chro.genes
 #save the chromosome
-chro.save()
+#chro.save()
 
 #---------
 #Different types of equivalent queries
 #---------
 
-f = RabaQuery(Chromosome)
+f = RabaQuery('test', Chromosome)
 f.addFilter(**{'id' : '= "22"'})
 f.addFilter(['id = "22"', 'count(genes) = 4'])
 f.addFilter('count(genes) = 4', id = '= "22"')
@@ -47,5 +46,5 @@ for chro in f.run() :
 	print chro
 	print "The name of the first gene"
 	print chro.genes[0].name
-	print "Inly the first gene of the list is fully loaded"
+	print "Only the first gene of the list is fully loaded"
 	print chro.genes

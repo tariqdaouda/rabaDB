@@ -15,7 +15,13 @@ class RabaNameSpaceSingleton(type):
 	def __call__(cls, *args, **kwargs):
 		if len(args) < 1 :
 			raise ValueError('The first argument to %s must be a namespace' % cls.__name__)
-		key = '%s-%s' % (cls.__name__, args[0])
+		
+		if 'namespace' in kwargs :
+			nm = kwargs['namespace']
+		else :
+			nm = args[0]
+		key = '%s-%s' % (cls.__name__, nm)
+		
 		if key not in cls._instances:
 			cls._instances[key] = super(RabaNameSpaceSingleton, cls).__call__(*args, **kwargs)
 		return cls._instances[key]
@@ -35,7 +41,7 @@ class RabaConfiguration(object) :
 			Have you forgotten to add: %s('%s', 'the path to you db file') just after the import of setup?""" % (namespace, self.__class__.__name__, namespace))
 		self.dbFile = dbFile
 		self.loadedRabaClasses = {}
-	
+
 	def registerRabaClass(self, cls) :
 		self.loadedRabaClasses[cls.__name__] = cls
 	
@@ -50,6 +56,7 @@ class RabaConnection(object) :
 	def __init__(self, namespace) :
 		#conf = confParser('rabaDB.conf')
 		self.connection = sq.connect(RabaConfiguration(namespace).dbFile)
+		self.setReadOnly(readOnly)
 		
 		cur = self.connection.cursor()
 		sql = "SELECT name FROM sqlite_master WHERE type='table'"
@@ -69,7 +76,8 @@ class RabaConnection(object) :
 			self.connection.cursor().execute(sql)
 			self.connection.commit()
 			self.tables.add('raba_tables_constraints')
-		
+	
+
 	def __getattr__(self, name):
 		return self.connection.__getattribute__(name)
 		
