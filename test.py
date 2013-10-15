@@ -5,8 +5,10 @@ class RabaPupaSingleton(type):
 		key = '%s%d' % (str(args[0]), args[1])
 		print key
 		if cls not in cls._instances:
-			cls._instances[cls] = super(RabapPupaSingleton, cls).__call__(*args, **kwargs)
+			cls._instances[cls] = super(RabaPupaSingleton, cls).__call__(*args, **kwargs)
 		
+		v = cls._instances[cls]
+		print 'v', v
 		return cls._instances[cls]
 	
 	def __new__(cls, name, bases, dct) :
@@ -20,6 +22,6 @@ class A(object) :
 		self.a = a
 
 rs = A(5, 4)
-print rs.a
+print rs.a, rs
 rs = A(8, 4)
 print rs.a

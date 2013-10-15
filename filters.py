@@ -33,7 +33,7 @@ class RabaQuery :
 				pass
 			else :
 				resFct = self._parseFct(strFilters[i])
-				print resFct
+				#print resFct
 				if resFct != None :
 					 strFilters[i] = resFct
 				else :

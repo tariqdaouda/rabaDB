@@ -56,7 +56,7 @@ class RabaConnection(object) :
 	def __init__(self, namespace) :
 		#conf = confParser('rabaDB.conf')
 		self.connection = sq.connect(RabaConfiguration(namespace).dbFile)
-		self.setReadOnly(readOnly)
+		#self.setReadOnly(readOnly)
 		
 		cur = self.connection.cursor()
 		sql = "SELECT name FROM sqlite_master WHERE type='table'"

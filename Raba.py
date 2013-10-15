@@ -11,25 +11,30 @@ def isRabaObject(v) :
 def isRabaList(v) :
 	return hasattr(v.__class__, '_raba_list') and v.__class__._raba_list
 
-
-class RabaPupaSingletonMetaclass(type):
+def makeSingletonKey(cls, raba_id) :
+	return "%s%d" %(cls.__name__, raba_id)
+	
+class _RabaPupaSingleton_Metaclass(type):
 	_instances = {}
-	def __call__(cls, *args, **kwargs):
+	def __call__(clsObj, *args, **kwargs):
+		
 		if 'classObj' in kwargs :
-			clsObj = kwargs['classObj'].__name__
+			cls = kwargs['classObj']
 		else :
-			clsObj = args[0].__name__
+			cls = args[0]
 			
 		if 'raba_id' in kwargs :
 			raba_id = kwargs['raba_id']
 		else :
-			raba_id = args[0]
+			raba_id = args[1]
 		
-		key = '%s%d' % (clsObj, raba_id)
-		if key not in cls._instances:
-			cls._instances[key] = super(RabapPupaSingleton, cls).__call__(*args, **kwargs)
+		key = makeSingletonKey(cls, raba_id)
+		if key in _Raba_MetaClass._instances :
+			return _Raba_MetaClass._instances[key]
+		elif key not in clsObj._instances:
+			clsObj._instances[key] = super(_RabaPupaSingleton_Metaclass, clsObj).__call__(*args, **kwargs)
 		
-		return cls._instances[key]
+		return clsObj._instances[key]
 
 class _Raba_MetaClass(type) :
 	
@@ -46,7 +51,7 @@ class _Raba_MetaClass(type) :
 					fields.append(k)
 					columns[k.lower()] = -1
 					columnsToLowerCase[k.lower()] = k
-			
+					
 			try :
 				con = RabaConnection(dct['_raba_namespace'])
 			except KeyError :
@@ -107,13 +112,13 @@ class _Raba_MetaClass(type) :
 						cur.execute('ALTER TABLE %s ADD COLUMN %s' % (name, k))
 				con.commit()
 			
-			def _class_getAttr(self, k) :
-				try :
-					return getattr(self, self._fieldsLowCase[k.lower()])
-				except :
-					raise AttributeError("Raba type '%s' has no attribute '%s'" % (self.__name__, k))
+			#def _class_getAttr(self, k) :
+			#	try :
+			#		return getattr(self, self._fieldsLowCase[k.lower()])
+			#	except :
+			#		raise AttributeError("Raba type '%s' has no attribute '%s'" % (cls.__name__, k))
 			
-			cls.__getattr__ = _class_getAttr
+			#cls.__getattr__ = _class_getAttr
 		
 			columns['raba_id'] = 0
 			dct['raba_id'] = RabaFields.PrimitiveField()
@@ -124,8 +129,82 @@ class _Raba_MetaClass(type) :
 			RabaConfiguration(dct['_raba_namespace']).registerRabaClass(clsObj)
 			
 			return clsObj
-			
+		
 		return type.__new__(cls, name, bases, dct)
+	
+	def __call__(cls, **fieldsSet) :
+		if cls != Raba :
+			
+			if 'raba_id' in fieldsSet :
+				key = makeSingletonKey(cls, fieldsSet['raba_id'])
+				if key in cls._instances :
+					return cls._instances[key]
+			
+			connection = RabaConnection(cls._raba_namespace)
+			rabaConfiguration =  RabaConfiguration(cls._raba_namespace)
+			
+			definedFields = []
+			definedValues = []
+			for k, v in fieldsSet.items() :
+				if k.lower() in cls.columns : 
+					definedFields.append(k)
+					definedValues.append(v)
+			
+			if len(definedValues) > 0 :
+				strWhere = ''
+				for k in definedFields :
+					strWhere = '%s = ? AND' % k
+				
+				strWhere = strWhere[:-4]
+				sql = 'SELECT * FROM %s WHERE %s' % (cls.__name__, strWhere)
+				cur = connection.cursor()
+				cur.execute(sql, definedValues)
+				res = cur.fetchone()
+				if res != None :
+				
+					if cur.fetchone() != None :
+						raise KeyError("More than one object fit the arguments you've prodided to the constructor")
+					
+					if 'raba_id' in fieldsSet and res == None :
+						raise KeyError("There's no %s with a raba_id = %s" %(self._rabaClass.__name__, fieldsSet['raba_id']))
+					
+					raba_id = res[cls.columns['raba_id']]
+					key = makeSingletonKey(cls, raba_id)
+					if key in cls._instances :
+						return cls._instances[key]
+					
+					obj = super(_Raba_MetaClass, cls).__call__(**fieldsSet)
+					cls._instances[key] = obj
+				
+					for kk, i in cls.columns.items() :
+						k = cls.columnsToLowerCase[kk]
+						elmt = getattr(cls, k)
+						if RabaFields.typeIsPrimitive(elmt) :
+							try :
+								object.__setattr__(obj, k, cPickle.loads(str(res[i])))
+							except :
+								object.__setattr__(obj, k, res[i])
+						elif RabaFields.typeIsRabaObject(elmt) :
+							if res[i] != None :
+								val = json.loads(res[i])
+								objClass = self.rabaConfiguration.getClass(val["className"])
+								object.__setattr__(obj, k, RabaPupa(objClass, val["raba_id"]))
+						elif RabaFields.typeIsRabaList(elmt) :
+							object.__setattr__(obj, k, RabaListPupa(cls._raba_namespace, anchorObj =  obj, relationName = k))
+				else :
+					obj = super(_Raba_MetaClass, cls).__call__(**fieldsSet)
+					cls._instances[key] = obj
+					
+					for k, v in fieldsSet.items() :
+						if k.lower() in cls.columns : 
+							object.__setattr__(self, k, v)
+				
+				obj.connection = connection
+				obj.rabaConfiguration = rabaConfiguration
+				cls._instances[key] = obj
+				return obj
+		
+		super(_Raba_MetaClass, cls).__call__(**fieldsSet)
 
 class RabaPupa(object) :
 	"""One of the founding principles of RabaDB is to separate the storage from the code. Fields are stored in the DB while the processing only depends
@@ -135,7 +214,7 @@ class RabaPupa(object) :
 	For a pupa self._rabaClass refers to the class of the object "inside" the pupa.
 	"""
 	
-	__metaclass__ = RabaPupaSingletonMetaclass
+	__metaclass__ = _RabaPupaSingleton_Metaclass
 	
 	def __init__(self, classObj, raba_id) :
 		self._rabaClass = classObj
@@ -181,7 +260,7 @@ class Raba(object):
 		
 		self.connection = RabaConnection(self._rabaClass._raba_namespace)
 		self.rabaConfiguration =  RabaConfiguration(self._rabaClass._raba_namespace)
-		self.columns = self.__class__.columns
+		"""#self.columns = self.__class__.columns
 		
 		#Initialisation
 		self.raba_id = None
@@ -229,7 +308,7 @@ class Raba(object):
 							objClass = self.rabaConfiguration.getClass(val["className"])
 							object.__setattr__(self, k, RabaPupa(objClass, val["raba_id"]))
 					elif RabaFields.typeIsRabaList(elmt) :
-						object.__setattr__(self, k, RabaListPupa(self.__class__._raba_namespace, anchorObj = self, relationName = k))
+						object.__setattr__(self, k, RabaListPupa(self.__class__._raba_namespace, anchorObj = self, relationName = k))"""
 
 	def autoclean(self) :
 		"""TODO: Copies the table into a new one droping all the collumns that have all their values to NULL
