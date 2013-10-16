@@ -18,7 +18,7 @@ class RabaPupaSingleton(type):
 class A(object) :
 	__metaclass__ = RabaPupaSingleton
 	def __init__(self, a, b) :
-		print "aa"
+		print "init"
 		self.a = a
 
 rs = A(5, 4)

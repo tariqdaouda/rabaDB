@@ -1,9 +1,12 @@
 import sqlite3 as sq
-import os, copy, types, cPickle, random, json
+import os, copy, types, cPickle, random, json#, weakref
 from collections import MutableSequence
 
 from setup import RabaConnection, RabaConfiguration
 import fields as RabaFields
+
+def makeRabaObjectSingletonKey(clsName, namespace, raba_id) :
+	return "%s%s%d" %(clsName, namespace, raba_id)
 
 def isRabaObject(v) :
 	return hasattr(v, '_rabaClass')
@@ -11,9 +14,6 @@ def isRabaObject(v) :
 def isRabaList(v) :
 	return hasattr(v.__class__, '_raba_list') and v.__class__._raba_list
 
-def makeSingletonKey(cls, raba_id) :
-	return "%s%d" %(cls.__name__, raba_id)
-	
 class _RabaPupaSingleton_Metaclass(type):
 	_instances = {}
 	def __call__(clsObj, *args, **kwargs):
@@ -28,7 +28,7 @@ class _RabaPupaSingleton_Metaclass(type):
 		else :
 			raba_id = args[1]
 		
-		key = makeSingletonKey(cls, raba_id)
+		key = makeRabaObjectSingletonKey(cls.__name__, cls._raba_namespace, raba_id)
 		if key in _Raba_MetaClass._instances :
 			return _Raba_MetaClass._instances[key]
 		elif key not in clsObj._instances :
@@ -132,81 +132,42 @@ class _Raba_MetaClass(type) :
 		
 		return type.__new__(cls, name, bases, dct)
 	
-	def __call__(cls, **fieldsSet) :
-		if cls != Raba :
+	def __call__(cls, **fieldsDct) :
+		if cls == Raba :
+			return super(_Raba_MetaClass, cls).__call__(**fieldsDct)
 			
-			if 'raba_id' in fieldsSet :
-				key = makeSingletonKey(cls, fieldsSet['raba_id'])
-				if key in cls._instances :
-					return cls._instances[key]
+		if 'raba_id' in fieldsDct :
+			key = makeRabaObjectSingletonKey(cls.__name__, cls._raba_namespace, fieldsDct['raba_id'])
+			if key in cls._instances :
+				return cls._instances[key]
+		else :
+			key = None
 			
-			connection = RabaConnection(cls._raba_namespace)
-			rabaConfiguration =  RabaConfiguration(cls._raba_namespace)
+		connection = RabaConnection(cls._raba_namespace)
+		cur = connection.getRabaObjectInfos(cls.__name__, fieldsDct)
+		dbLine = cur.fetchone()
+		if dbLine != None :
+			if cur.fetchone() != None :
+				raise KeyError("More than one object fit the arguments you've prodided to the constructor")
 			
-			definedFields = []
-			definedValues = []
-			for k, v in fieldsSet.items() :
-				if k.lower() in cls.columns : 
-					definedFields.append(k)
-					definedValues.append(v)
+			if 'raba_id' in fieldsDct and res == None :
+				raise KeyError("There's no %s with a raba_id = %s" %(self._rabaClass.__name__, fieldsDct['raba_id']))
 			
-			if len(definedValues) > 0 :
-				strWhere = ''
-				for k in definedFields :
-					strWhere = '%s = ? AND' % k
-				
-				strWhere = strWhere[:-4]
-				sql = 'SELECT * FROM %s WHERE %s' % (cls.__name__, strWhere)
-				cur = connection.cursor()
-				cur.execute(sql, definedValues)
-				res = cur.fetchone()
-				if res != None :
-				
-					if cur.fetchone() != None :
-						raise KeyError("More than one object fit the arguments you've prodided to the constructor")
-					
-					if 'raba_id' in fieldsSet and res == None :
-						raise KeyError("There's no %s with a raba_id = %s" %(self._rabaClass.__name__, fieldsSet['raba_id']))
-					
-					raba_id = res[cls.columns['raba_id']]
-					key = makeSingletonKey(cls, raba_id)
-					if key in cls._instances :
-						return cls._instances[key]
-					
-					obj = super(_Raba_MetaClass, cls).__call__(**fieldsSet)
-					cls._instances[key] = obj
-				
-					for kk, i in cls.columns.items() :
-						k = cls.columnsToLowerCase[kk]
-						elmt = getattr(cls, k)
-						if RabaFields.typeIsPrimitive(elmt) :
-							try :
-								object.__setattr__(obj, k, cPickle.loads(str(res[i])))
-							except :
-								object.__setattr__(obj, k, res[i])
-						elif RabaFields.typeIsRabaObject(elmt) :
-							if res[i] != None :
-								val = json.loads(res[i])
-								objClass = self.rabaConfiguration.getClass(val["className"])
-								object.__setattr__(obj, k, RabaPupa(objClass, val["raba_id"]))
-						elif RabaFields.typeIsRabaList(elmt) :
-							object.__setattr__(obj, k, RabaListPupa(cls._raba_namespace, anchorObj =  obj, relationName = k))
-				else :
-					obj = super(_Raba_MetaClass, cls).__call__(**fieldsSet)
-					
-					for k, v in fieldsSet.items() :
-						if k.lower() in cls.columns : 
-							object.__setattr__(obj, k, v)
-				
-					if 'raba_id' in fieldsSet :
-						key = makeSingletonKey(cls, fieldsSet['raba_id'])
-						cls._instances[key] = obj
-					
-				obj.connection = connection
-				obj.rabaConfiguration = rabaConfiguration
-				return obj
+			raba_id = dbLine[cls.columns['raba_id']]
+			key = makeRabaObjectSingletonKey(cls.__name__, cls._raba_namespace, raba_id)
+			if key in cls._instances :
+				return cls._instances[key]
+			
+			obj = super(_Raba_MetaClass, cls).__call__(**fieldsDct)	
+			obj._setWithDbLine(dbLine)
+			cls._instances[key] = obj					
+		else :
+			obj = super(_Raba_MetaClass, cls).__call__(**fieldsDct)
+			obj._setWithDct(fieldsDct)
+			if key != None :
+				cls._instances[key] = obj
 		
-		super(_Raba_MetaClass, cls).__call__(**fieldsSet)
+		return obj
 
 class RabaPupa(object) :
 	"""One of the founding principles of RabaDB is to separate the storage from the code. Fields are stored in the DB while the processing only depends
@@ -241,8 +202,11 @@ class RabaPupa(object) :
 		purge = getAttr('__dict__').keys()
 		for k in purge :
 			delattr(self, k)
-			
+		
 		Raba.__init__(self, raba_id = uniqueId)
+		connection = RabaConnection(self._raba_namespace)
+		dbLine = connection.getRabaObjectInfos(self._rabaClass.__name__, {'raba_id' : uniqueId}).fetchone()
+		self._setWithDbLine(dbLine)
 		
 		return object.__getattribute__(self, name)
 	
@@ -250,8 +214,34 @@ class RabaPupa(object) :
 		return "<Raba pupa: %s, raba_id %s>" % (self._rabaClass.__name__, self.raba_id)
 
 class Raba(object):
-	"All raba object must inherit from this class. If the class has no attribute raba_id, an autoincrement field raba_id will be created"	
+	"All raba object inherit from this class"	
 	__metaclass__ = _Raba_MetaClass
+	
+	def _setWithDbLine(self, dbLine) :
+		for kk, i in self.columns.items() :
+			k = self.columnsToLowerCase[kk]
+			elmt = getattr(self._rabaClass, k)
+			if RabaFields.typeIsPrimitive(elmt) :
+				try :
+					self.__setattr__(k, cPickle.loads(str(dbLine[i])))
+				except :
+					self.__setattr__(k, dbLine[i])
+			elif RabaFields.typeIsRabaObject(elmt) :
+				if dbLine[i] != None :
+					val = json.loads(dbLine[i])
+					objClass = self.rabaConfiguration.getClass(val["className"])
+					self.__setattr__(k, RabaPupa(objClass, val["raba_id"]))
+			elif RabaFields.typeIsRabaList(elmt) :
+				self.__setattr__(k, RabaListPupa(self._raba_namespace, anchorObj =  self, relationName = k))
+			else :
+				raise ValueError("Unable to set field %s to %s in Raba object %s" %(k, dbLine[i], self._rabaClass.__name__))
+	
+	def _setWithDct(self, dct) :
+		for k, v in dct.items() :
+			if k.lower() in self.columns : 
+				self.__setattr__(k, v)
+			else :
+				raise KeyError("Raba object %s has no field %s" %(self._rabaClass.__name__, k))
 	
 	def __init__(self, **fieldsSet) :
 		
@@ -262,56 +252,6 @@ class Raba(object):
 		
 		self.connection = RabaConnection(self._rabaClass._raba_namespace)
 		self.rabaConfiguration =  RabaConfiguration(self._rabaClass._raba_namespace)
-		
-		"""#self.columns = self.__class__.columns
-		
-		#Initialisation
-		self.raba_id = None
-		
-		definedFields = []
-		definedValues = []
-		for k, v in fieldsSet.items() :
-			if k.lower() in self.columns : 
-				object.__setattr__(self, k, v)
-				definedFields.append(k)
-				definedValues.append(v)
-		
-		if len(definedValues) > 0 :
-			strWhere = ''
-			for k in definedFields :
-				strWhere = '%s = ? AND' % k
-			
-			strWhere = strWhere[:-4]
-			sql = 'SELECT * FROM %s WHERE %s' % (self.__class__.__name__, strWhere)
-			cur = self.connection.cursor()
-			cur.execute(sql, definedValues)
-			res = cur.fetchone()
-			
-			if cur.fetchone() != None :
-				raise KeyError("More than one object fit the arguments you've prodided to the constructor")
-			
-			if 'raba_id' in fieldsSet and res == None :
-				raise KeyError("There's no %s with a raba_id = %s" %(self._rabaClass.__name__, fieldsSet['raba_id']))
-			
-			#print self.columns
-			if res != None :
-				for kk, i in self.columns.items() :
-					k = self.columnsToLowerCase[kk]
-					#if k != 'raba_id' :
-					elmt = getattr(self.__class__, k)
-					if RabaFields.typeIsPrimitive(elmt) :
-						try :
-							object.__setattr__(self, k, cPickle.loads(str(res[i])))
-						except :
-							object.__setattr__(self, k, res[i])
-					elif RabaFields.typeIsRabaObject(elmt) :
-						if res[i] != None :
-							val = json.loads(res[i])
-							#print '----', elmt, val, i, res[i]
-							objClass = self.rabaConfiguration.getClass(val["className"])
-							object.__setattr__(self, k, RabaPupa(objClass, val["raba_id"]))
-					elif RabaFields.typeIsRabaList(elmt) :
-						object.__setattr__(self, k, RabaListPupa(self.__class__._raba_namespace, anchorObj = self, relationName = k))"""
 
 	def autoclean(self) :
 		"""TODO: Copies the table into a new one droping all the collumns that have all their values to NULL
@@ -327,6 +267,7 @@ class Raba(object):
 		values = []
 		rabalists = []
 		cur = self.connection.cursor()
+		listsToSave = []
 		for k, valType in self.__class__.__dict__.items() :
 			if RabaFields.isField(valType) and k != 'raba_id':
 				val = getattr(self, k)
@@ -350,7 +291,7 @@ class Raba(object):
 							fields.append(k)
 				else :
 					if val != None and (val.__class__ is RabaList or val.__class__ is RabaListPupa)  :
-						val._save()
+						listsToSave.append(val)
 						#values.append('%s, len:%d' %(val.tableName, len(val)))
 						values.append(len(val))
 						fields.append(k)
@@ -362,7 +303,7 @@ class Raba(object):
 				sql = 'INSERT INTO %s (%s) VALUES (%s)' % (self.__class__.__name__, ','.join(fields), ','.join(['?' for i in range(len(fields))]))
 				cur.execute(sql, values)
 				object.__setattr__(self, 'raba_id', cur.lastrowid)
-				key = makeSingletonKey(self._rabaClass, self.raba_id)
+				key = makeRabaObjectSingletonKey(self._rabaClass.__name__, self._raba_namespace, self.raba_id)
 				_Raba_MetaClass._instances[key] = self
 				#_Raba_MetaClass.registerRabaObject(self, self.raba_id)
 			else :
@@ -371,6 +312,9 @@ class Raba(object):
 				cur.execute(sql, values)
 		else :
 			raise ValueError('class %s has no fields to save' % self.__class__.__name__)
+		
+		for l in listsToSave :
+			l._save()
 		
 		self.connection.commit()
 
@@ -384,8 +328,8 @@ class Raba(object):
 		return  {'type' : RabaFields.RABA_FIELD_TYPE_IS_RABA_OBJECT, 'className' : self._rabaClass.__name__, 'raba_id' : self.raba_id}
 		
 	def __setattr__(self, k, v) :
-		if k == 'raba_id' :
-			raise ValueError("It's forbidden to manualy set the raba_id" )
+		#if k == 'raba_id' :
+		#	raise ValueError("It's forbidden to manualy set the raba_id" )
 			
 		if hasattr(self.__class__, k) and RabaFields.isField(getattr(self.__class__, k)) :
 			if not isRabaList(getattr(self.__class__, k)) :
@@ -423,6 +367,7 @@ class Raba(object):
 		return "<Raba obj: %s, raba_id: %s>" % (self._rabaClass.__name__, self.raba_id)
 	
 class RabaListPupa(MutableSequence) :
+	
 	_isRabaList = True
 	
 	def __init__(self, namespace, anchorObj, relationName) :
@@ -557,7 +502,6 @@ class RabaList(MutableSequence) :
 			elif self._raba_namespace == None :
 				self._raba_namespace = namespace
 			
-			
 		if len(listElements) > 0 :
 			self.data = list(listElements[0])
 		else :
@@ -615,7 +559,7 @@ class RabaList(MutableSequence) :
 					values.append((self.anchorObj.raba_id, e, RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE))
 				else :
 					values.append((self.anchorObj.raba_id, buffer(cPickle.dumps(e)), RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE))
-					
+			
 			self.connection.cursor().executemany('INSERT INTO %s (anchor_id, value_or_id, type) VALUES (?, ?, ?)' % self.tableName, values)
 			self.connection.commit()
 			

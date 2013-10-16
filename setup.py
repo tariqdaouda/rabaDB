@@ -12,6 +12,7 @@ import os
 
 class RabaNameSpaceSingleton(type):
 	_instances = {}
+	
 	def __call__(cls, *args, **kwargs):
 		if len(args) < 1 :
 			raise ValueError('The first argument to %s must be a namespace' % cls.__name__)
@@ -98,6 +99,26 @@ class RabaConnection(object) :
 			self.connection.cursor().execute(sql)
 			self.connection.commit()
 			self.tables.add(tableName)
+	
+	def getRabaObjectInfos(self, className, fieldsDct) :
+		definedFields = []
+		definedValues = []
+		for k, v in fieldsDct.items() :
+			definedFields.append(k)
+			definedValues.append(v)
+	
+		if len(definedValues) > 0 :
+			strWhere = ''
+			for k in definedFields :
+				strWhere = '%s = ? AND' % k
+			
+			strWhere = strWhere[:-4]
+			sql = 'SELECT * FROM %s WHERE %s' % (className, strWhere)
+			cur = self.connection.cursor()
+			#print sql
+			cur.execute(sql, definedValues)
+		
+		return cur
 	
 	def registerRabalist(self, anchor_class_name, relation_name) :
 		table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
