@@ -15,10 +15,12 @@ class Chromosome(Raba) :
 	_raba_namespace = 'test'
 	id = PrimitiveField(default = '')
 	genes = RabaListField()
+	genes_2 = RabaListField()
 	def __init__(self, **fieldsSet) :
 		Raba.__init__(self, **fieldsSet)
 
-"""print 'Create a gene'
+"""
+print 'Create a gene'
 gene = Gene(name = 'TPST2')
 print 'Create or load the chromosome 22'
 chro = Chromosome(id = '22')
@@ -53,4 +55,12 @@ for chro2 in f.run() :
 	print '\t', chro2.genes[0].name
 	#print '\t', chro2.genes[1].name
 	print "Only the first gene of the list is fully loaded"
+	print '\t', chro2.genes
+
+f = RabaQuery('test', Chromosome)
+f.addFilter(**{'id' : '= "22"'})
+f.addFilter(['id = "22"', 'count(genes) = 4'])
+f.addFilter('count(genes) = 4', id = '= "22"')
+
+for chro2 in f.run() :
 	print '\t', chro2.genes

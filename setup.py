@@ -123,14 +123,14 @@ class RabaConnection(object) :
 	def registerRabalist(self, anchor_class_name, relation_name) :
 		table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
 		
-		self.createTable(table_name, 'id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_id, value_or_id, type')
+		self.createTable(table_name, 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_id, value_or_id, type')
 		
 		sql = 'INSERT INTO rabalist_master (anchor_class, relation_name, table_name, length) VALUES (?, ?, ?, ?)'
 		cur = self.connection.cursor()
 		cur.execute(sql, (anchor_class_name, relation_name, table_name, 0))
-		id = cur.lastrowid
+		raba_id = cur.lastrowid
 		self.connection.commit()
-		return id, table_name
+		return raba_id, table_name
 	
 	def unregisterRabalist(self, anchor_class_name, relation_name) :
 		table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
@@ -164,7 +164,7 @@ class RabaConnection(object) :
 		res = cur.fetchone()
 		if res == None :
 			return None
-		return {'id' : res[0], 'anchor_class' : res[1], 'relation_name' : res[2], 'table_name' : res[3], 'length' : res[4]}
+		return {'raba_id' : res[0], 'anchor_class' : res[1], 'relation_name' : res[2], 'table_name' : res[3], 'length' : res[4]}
 	
 	def getRabaListTables(self) :
 		sql = 'SELECT * FROM rabalist_master'
