@@ -21,10 +21,10 @@ class RabaNameSpaceSingleton(type):
 			nm = kwargs['namespace']
 		else :
 			nm = args[0]
-		key = '%s-%s' % (cls.__name__, nm)
+		key = (cls.__name__, nm)
 		
 		if key not in cls._instances:
-			cls._instances[key] = super(RabaNameSpaceSingleton, cls).__call__(*args, **kwargs)
+			cls._instances[key] = type.__call__(cls, *args, **kwargs)
 		return cls._instances[key]
 
 class RabaConfiguration(object) :
@@ -42,12 +42,35 @@ class RabaConfiguration(object) :
 			Have you forgotten to add: %s('%s', 'the path to you db file') just after the import of setup?""" % (namespace, self.__class__.__name__, namespace))
 		self.dbFile = dbFile
 		self.loadedRabaClasses = {}
-
+		self.saveIniator = None
+		self.savedObject = set()
+	
+	def initateSave(self, obj) :
+		if self.saveIniator != None :
+			return False
+		self.saveIniator = obj
+		return True
+	
+	def freeSave(self, obj) :
+		if self.saveIniator is obj :
+			self.saveIniator = None
+			self.savedObject = set()
+			return True
+		return False
+	
+	def canISave(self, obj) :
+		if obj._runtimeId in self.savedObject :
+			return False
+		
+		self.savedObject.add(obj._runtimeId)
+		return True
+	
 	def registerRabaClass(self, cls) :
 		self.loadedRabaClasses[cls.__name__] = cls
 	
 	def getClass(self, name) :
 		return self.loadedRabaClasses[name]
+	
 	
 class RabaConnection(object) :
 	"""A class that manages the connection to the sqlite3 database. Don't be afraid to call RabaConnection() as much as you want"""
@@ -103,23 +126,20 @@ class RabaConnection(object) :
 	def getRabaObjectInfos(self, className, fieldsDct) :
 		definedFields = []
 		definedValues = []
+		strWhere = ''
 		for k, v in fieldsDct.items() :
 			definedFields.append(k)
 			definedValues.append(v)
-	
-		if len(definedValues) > 0 :
-			strWhere = ''
-			for k in definedFields :
-				strWhere = '%s = ? AND' % k
+			strWhere = '%s %s = ? AND' % (strWhere, k)
 			
-			strWhere = strWhere[:-4]
+		strWhere = strWhere[:-4]
+		cur = self.connection.cursor()
+		if len(definedValues) > 0 :
 			sql = 'SELECT * FROM %s WHERE %s' % (className, strWhere)
-			cur = self.connection.cursor()
-			#print sql
+			#print sql, definedValues
 			cur.execute(sql, definedValues)
-		
 		return cur
-	
+		
 	def registerRabalist(self, anchor_class_name, relation_name) :
 		table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
 		

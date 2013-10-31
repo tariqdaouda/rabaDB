@@ -1,4 +1,5 @@
 import types
+import Raba
 
 RABA_FIELD_TYPE_IS_UNDEFINED = 'UNDEFINED'
 RABA_FIELD_TYPE_IS_PRIMITIVE = 'PRIMITIVE'
@@ -31,7 +32,7 @@ class RabaListField(RabaField) :
 
 	def __init__(self, ElmtConstrainFct = None, **ElmtConstrainFctWArgs) :
 		RabaField.__init__(self, default = None, constrainFct = ElmtConstrainFct, **ElmtConstrainFctWArgs)
-		del(self.default)
+		del(self.default)# = None
 		
 class PrimitiveField(RabaField) :
 	_raba_type = RABA_FIELD_TYPE_IS_PRIMITIVE
@@ -59,7 +60,7 @@ class RabaObjectField(RabaField) :
 	def check(self, val) :
 		if val == self.default and self.default == None :
 			return True
-		return isRabaObject(val) and ((self.objClassName != None and val._rabaClass.__name__ == self.objClassName) or self.objClassName == None) and RabaField.check(self, val)
+		return Raba.isRabaObject(val) and ((self.objClassName != None and val._rabaClass.__name__ == self.objClassName) or self.objClassName == None) and RabaField.check(self, val)
 
 	def __repr__(self) :
 		return '<field %s, class: %s , default: %s>' % (self.__class__.__name__, self.objClassName, self.default)
@@ -76,10 +77,4 @@ def typeIsRabaObject(v) :
 
 def typeIsRabaList(v) :
 	return hasattr(v.__class__, '_raba_type') and v.__class__._raba_type == RABA_FIELD_TYPE_IS_RABA_LIST
-	
-def isPythonPrimitive(v) :
-	primTypes = [types.IntType, types.LongType, types.FloatType, types.StringType, types.UnicodeType, types.BufferType, types.NoneType]
-	for t in primTypes :
-		if isinstance(v, t) : 
-			return True
-	return False
+
