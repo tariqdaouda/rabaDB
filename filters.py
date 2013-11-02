@@ -4,6 +4,20 @@ from setup import *
 from Raba import *
 import fields as RabaFields
 
+#Usage:
+#
+#get all exons of a given transcript
+#f = RabaQuery(namespace, Exon)
+#f.addFilter(**{'transcript' : transcript})
+#transcript.exons = f.run()
+
+#TODO JOINTS:
+#
+#get all exons of a given transcript
+#f = RabaQuery(namespace, Exon)
+#f.addFilter(**{'self.transcript.gene' : gene})
+#transcript.exons = f.run()
+
 
 class RabaQuery :
 	
@@ -20,37 +34,41 @@ class RabaQuery :
 	
 	def addFilter(self, *lstFilters, **dctFilters) :
 		"add a new filter to the query"
-		strFilters = []#list(lstFilters)
 		filters = {}
 		for v in lstFilters :
 			if isinstance(v, types.ListType) or isinstance(v, types.TupleType) :
 				for v2 in v :
-					strFilters.append(v2)
+					res = self._parseInput(v2)
+					filters[res[0]] = res[1]
 			else :
-				strFilters.append(v)
+				self._parseInput(v)
+				filters[res[0]] = res[1]
 		
-		operators = set(['LIKE', '=', '<', '>', 'is'])
+		operators = set(['LIKE', '=', '<', '>', 'IS'])
 		for k, v in dctFilters.items() :
 			if k[-1].upper() not in operators :
 				kk = '%s =' % k
 			else :
 				kk = k
-				
-			try :
-				strFilters.append('%s %s' %(kk, v.getJsonEncoding()))
-			except :
-				strFilters.append('%s %s' %(k, v))
-
-		for f in strFilters :
-			res = self._parseField(f)
-			if res == None :
-				res = self._parseFct(f)
-				if res == None :
-					raise ValueError("RabaQuery Error: Invalid filter '%s'" % f)
 			
-			filters[res[0]] = res[1]
+			try :
+				res = self._parseInput('%s %s' %(kk, v.getJsonEncoding()))
+				vv = v.getJsonEncoding()
+			except :
+				res = self._parseInput('%s %s' %(kk, v))
+				vv = v
+			
+			filters[res[0]] = vv
 		self.filters[len(self.filters) +1] = filters
-		
+	
+	def _parseInput(self, wholeStr) :
+		res = self._parseField(wholeStr)
+		if res == None :
+			res = self._parseFct(wholeStr)
+			if res == None :
+				raise ValueError("RabaQuery Error: Invalid filter '%s'" % wholeStr)
+		return res
+	
 	def _parseField(self, wholeStr)	:
 		match = self.fieldPattern.match(wholeStr)
 		if match == None :
@@ -90,7 +108,7 @@ class RabaQuery :
 		sqlFilters = []
 		sqlValues = []
 		for f in self.filters.values() :
-			sqlFilters.append('(%s ?)' % ' AND '.join(f.keys()))
+			sqlFilters.append('(%s ?)' % ' ? AND '.join(f.keys()))
 			sqlValues.extend(f.values())
 			
 		sqlFilters = ' OR '.join(sqlFilters)
@@ -103,7 +121,6 @@ class RabaQuery :
 		for v in cur :
 			res.append(RabaPupa(self.rabaType, v[0]))
 		
-		#print 'res-----', res
 		if returnSQL :
 			return (res, sql)
 		else :
