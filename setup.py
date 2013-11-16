@@ -34,7 +34,8 @@ class RabaConfiguration(object) :
 	
 	
 class RabaConnection(object) :
-	"""A class that manages the connection to the sqlite3 database. Don't be afraid to call RabaConnection() as much as you want"""
+	"""A class that manages the connection to the sqlite3 database. Don't be afraid to call RabaConnection() as much as you want. By default Raba tries to be smart and commits only when
+	you save a rabaobject but if you want comple controle over the commit process set self.manualCommitOnly = True"""
 	
 	__metaclass__ = RabaNameSpaceSingleton
 	
@@ -64,6 +65,7 @@ class RabaConnection(object) :
 		self.loadedRabaClasses = {}
 		self.saveIniator = None
 		self.savedObject = set()
+		self.manualCommitOnly = False
 	
 	def initateSave(self, obj) :
 		"""Tries to initiates a save sessions. Each object can only be saved once during a session.
@@ -79,7 +81,8 @@ class RabaConnection(object) :
 		if self.saveIniator is obj :
 			self.saveIniator = None
 			self.savedObject = set()
-			self.connection.commit()
+			if not self.manualCommitOnly :
+				self.connection.commit()
 			return True
 		return False
 	
@@ -203,7 +206,7 @@ class RabaConnection(object) :
 			res.append(c[0])
 		
 		return res
-
+		
 	def commit(self) :
 		"""Forces a commit"""
 		self.connection.commit()

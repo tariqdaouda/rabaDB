@@ -211,9 +211,12 @@ class _RabaSingleton_MetaClass(type) :
 			
 			obj = type.__call__(cls, initDbLine = dbLine, **fieldsDct)	
 			cls._instances[key] = obj					
+		elif len(params) > 0 :
+			raise KeyError("Couldn't find any object that fit the arguments you've prodided to the constructor")
+			#obj = type.__call__(cls, **fieldsDct)
 		else :
 			obj = type.__call__(cls, **fieldsDct)
-			
+		
 		return obj
 
 class RabaPupa(object) :
@@ -438,6 +441,15 @@ class Raba(object):
 	
 	def __repr__(self) :
 		return "<Raba obj: %s, raba_id: %s>" % (self._rabaClass.__name__, self.raba_id)
+	
+	def help(self) :
+		"returns a string of parameters"
+		fil = []
+		for k, v in self.__class__.__dict__.items() :
+			if RabaFields.isField(v) :
+				fil.append(k)
+ 
+		return 'Available fields for %s:\n%s' %(self.__class__.__name__, '\n'.join(fil))
 	
 class RabaListPupa(MutableSequence) :
 	
