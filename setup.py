@@ -35,7 +35,7 @@ class RabaConfiguration(object) :
 	
 class RabaConnection(object) :
 	"""A class that manages the connection to the sqlite3 database. Don't be afraid to call RabaConnection() as much as you want. By default Raba tries to be smart and commits only when
-	you save a rabaobject but if you want comple controle over the commit process set self.manualCommitOnly = True"""
+	you save a rabaobject but if you want complete controle over the commit process you can use autoCommitOnSave(False) and then use commit() manually"""
 	
 	__metaclass__ = RabaNameSpaceSingleton
 	
@@ -65,7 +65,11 @@ class RabaConnection(object) :
 		self.loadedRabaClasses = {}
 		self.saveIniator = None
 		self.savedObject = set()
-		self.manualCommitOnly = False
+		self.autoCommitOnSaveBool = True
+	
+	def autoCommitOnSave(self, boolean) :
+		"""A shortcut to set the value of self.manualCommitOnly. If true RabaDb will commit after eaxh save, if false you have to mannualy call commit()"""
+		self.manualCommitOnlyBool = boolean
 	
 	def initateSave(self, obj) :
 		"""Tries to initiates a save sessions. Each object can only be saved once during a session.
@@ -81,7 +85,7 @@ class RabaConnection(object) :
 		if self.saveIniator is obj :
 			self.saveIniator = None
 			self.savedObject = set()
-			if not self.manualCommitOnly :
+			if self.autoCommitOnSaveBool :
 				self.connection.commit()
 			return True
 		return False
@@ -100,8 +104,11 @@ class RabaConnection(object) :
 	
 	def getClass(self, name) :
 		"""returns a loaded raba class given it's name"""
-		return self.loadedRabaClasses[name]
-	
+		try :
+			return self.loadedRabaClasses[name]
+		except KeyError :
+			raise KeyError("There's not class named %s" % name)
+			
 	def tableExits(self, name) :
 		return name in self.tables
 
@@ -140,7 +147,7 @@ class RabaConnection(object) :
 	def registerRabalist(self, anchor_class_name, anchor_raba_id, relation_name) :
 		table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
 		
-		self.createTable(table_name, 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_raba_id, value_or_raba_id, type')
+		self.createTable(table_name, 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_raba_id, value, type')
 		
 		sql = 'INSERT INTO rabalist_master (anchor_class, anchor_raba_id, relation_name, table_name, length) VALUES (?, ?, ?, ?, ?)'
 		cur = self.connection.cursor()

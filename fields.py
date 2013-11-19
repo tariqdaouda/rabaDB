@@ -1,10 +1,10 @@
 import types
 import Raba
 
-RABA_FIELD_TYPE_IS_UNDEFINED = 'UNDEFINED'
-RABA_FIELD_TYPE_IS_PRIMITIVE = 'PRIMITIVE'
-RABA_FIELD_TYPE_IS_RABA_OBJECT = 'RABA_OBJECT'
-RABA_FIELD_TYPE_IS_RABA_LIST = 'RABA_LIST'
+RABA_FIELD_TYPE_IS_UNDEFINED = -1
+RABA_FIELD_TYPE_IS_PRIMITIVE = 0
+RABA_FIELD_TYPE_IS_RABA_OBJECT = 1
+RABA_FIELD_TYPE_IS_RABA_LIST = 2
 
 class RabaField(object) :
 	_raba_field = True
@@ -33,7 +33,15 @@ class RabaListField(RabaField) :
 	def __init__(self, ElmtConstrainFct = None, **ElmtConstrainFctWArgs) :
 		RabaField.__init__(self, default = None, constrainFct = ElmtConstrainFct, **ElmtConstrainFctWArgs)
 		del(self.default)# = None
-		
+
+class RabaRelationField(RabaListField) :
+	def __init__(self, objClassName = None, ElmtConstrainFct = None, **ElmtConstrainFctWArgs) :
+		self.objClassName = objClassName
+		RabaListField.__init__(self, ElmtConstrainFct, **ElmtConstrainFctWArgs)
+	
+	def check(self, val) :
+		return Raba.isRabaObject(val) and ((self.objClassName != None and val._rabaClass.__name__ == self.objClassName) or self.objClassName == None) and RabaListField.check(self, val)
+
 class PrimitiveField(RabaField) :
 	_raba_type = RABA_FIELD_TYPE_IS_PRIMITIVE
 	
