@@ -138,7 +138,7 @@ class _RabaSingleton_MetaClass(type) :
 				cur.execute(sql, (name,))
 				res = cur.fetchone()
 				
-				if res != None and res[0] != uniqueStr :
+				if res != None and res[0]!= '' and res[0] != uniqueStr :
 					raise FutureWarning('Warning: The unique contraints have changed from:\n\t%s\n\nto:\n\t%s.\n-Unique constraints modification is not supported yet-\n' %(res[0], uniqueStr))
 					
 				cur.execute('PRAGMA table_info("%s")' % name)
@@ -407,10 +407,10 @@ class Raba(object):
 					raise ValueError("Unable to set '%s' to value '%s'. Constrain function violation" % (k, vv))
 			else :
 				if vv.__class__ is not RabaList and vv.__class__ is not RabaListPupa :
-					#try :
-					vv = RabaList(v)
-					#except :
-					#	raise ValueError("Unable to set '%s' to value '%s'. Value is not a valid RabaList" % (k, vv))
+					try :
+						vv = RabaList(v)
+					except :
+						raise ValueError("Unable to set '%s' to value '%s'. Value is not a valid RabaList" % (k, vv))
 				
 				currList = getattr(self, k)
 				if vv is not currList :

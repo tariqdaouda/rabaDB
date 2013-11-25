@@ -9,15 +9,15 @@ import fields as RabaFields
 #get all exons of a given transcript
 #f = RabaQuery(namespace, Exon)
 #f.addFilter(**{'transcript' : transcript})
-#transcript.exons = f.run()
+#exons = f.run()
 
 #TODO JOINTS:
 #
 #get all exons of a given transcript
 #f = RabaQuery(namespace, Exon)
-#f.addFilter(**{'self.transcript.gene' : gene})
-#transcript.exons = f.run()
-
+#f.addFilter(**{'transcript->gene' : gene})
+#exons = f.run()
+#select * from exon where exon.transcript_id = transcript.id and transcript.gene_id = gene.id
 
 class RabaQuery :
 	
