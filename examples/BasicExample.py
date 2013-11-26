@@ -1,39 +1,46 @@
 from rabaDB.setup import *
 RabaConfiguration('test', './dbTest_BasicExample.db')
-from rabaDB.Raba import *
+import rabaDB.Raba as R
 from rabaDB.filters import *
 from rabaDB.fields import *
 
-
-class Gene(Raba) :
+class Gene(R.Raba) :
 	_raba_namespace = 'test'
 	name = PrimitiveField(default = '')
 	def __init__(self, **fieldsSet) :
-		Raba.__init__(self, **fieldsSet)
+		R.Raba.__init__(self, **fieldsSet)
 
-class Chromosome(Raba) :
+class Chromosome(R.Raba) :
 	_raba_namespace = 'test'
 	id = PrimitiveField(default = '')
-	genes = RabaListField()
+	genes = RabaRelationField()
 	genes_2 = RabaListField()
 	def __init__(self, **fieldsSet) :
-		Raba.__init__(self, **fieldsSet)
+		R.Raba.__init__(self, **fieldsSet)
 
-"""
-print 'Create a gene'
-gene = Gene(name = 'TPST2')
-print 'Create or load the chromosome 22'
-chro = Chromosome(id = '22')
-print 'Add the genes TPST2 and TPST3 to the chromosome'
+
+
+print '\nCreate a gene'
+gene = Gene()
+gene.set(name = 'TPST2')
+print '\nCreate or load the chromosome 22'
+
+try :
+	chro = Chromosome(id = '22')
+except :
+	chro = Chromosome()
+	chro.set(id = '22')
+
+print '\nAdd the genes TPST2 the chromosome'
 chro.genes.append(gene)
-chro.genes.append(Gene(name = 'TPST3'))
-print 'Name of last gene in list'
+print '\nName of last gene in list'
 print chro.genes[-1].name
-print 'the complete list'
+print '\nthe complete list'
 print chro.genes
-print 'save the chromosome'
+print '\nsave the chromosome'
 chro.save()
-"""
+
+'''
 #---------
 #Different types of equivalent queries
 #---------
@@ -64,3 +71,4 @@ f.addFilter('count(genes) = 4', id = '= "22"')
 
 for chro2 in f.run() :
 	print '\t', chro2.genes
+'''

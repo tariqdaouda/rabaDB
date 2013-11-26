@@ -51,7 +51,7 @@ class RabaConnection(object) :
 			self.tables.add(n[0])
 		
 		if not self.tableExits('rabalist_master') :
-			sql = "CREATE TABLE rabalist_master (id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_class NOT NULL, anchor_raba_id, relation_name NOT NULL, table_name NOT NULL, length DEFAULT 0)"
+			sql = "CREATE TABLE rabalist_master (id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_class NOT NULL, anchor_raba_id, relation_name NOT NULL, table_name NOT NULL, length DEFAULT 0, UNIQUE (table_name) ON CONFLICT REPLACE)"
 			self.connection.cursor().execute(sql)
 			self.connection.commit()
 			self.tables.add('rabalist_master')
@@ -147,7 +147,7 @@ class RabaConnection(object) :
 	def registerRabalist(self, anchor_class_name, anchor_raba_id, relation_name) :
 		table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
 		
-		self.createTable(table_name, 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_raba_id, value, type')
+		self.createTable(table_name, 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_raba_id, value, type, obj_raba_class_name, obj_raba_id, obj_raba_namespace')
 		
 		sql = 'INSERT INTO rabalist_master (anchor_class, anchor_raba_id, relation_name, table_name, length) VALUES (?, ?, ?, ?, ?)'
 		cur = self.connection.cursor()
@@ -194,11 +194,14 @@ class RabaConnection(object) :
 				return None
 			
 		res = cur.fetchone()
+		#print '-----', res, (sql, (self.makeRabaListTableName(fields['anchor_class_name'], fields['relation_name']), fields['anchor_raba_id']))
 		if res == None :
 			return None
 		
 		res2 = cur.fetchone()
 		if res2 != None :
+			print res
+			print res2
 			raise ValueError("The parameters %s are valid for more than one element" % fields)
 		
 		return {'raba_id' : res[0], 'anchor_class' : str(res[1]), 'anchor_raba_id' : str(res[2]), 'relation_name' : str(res[3]), 'table_name' : str(res[4]), 'length' : int(res[5])}

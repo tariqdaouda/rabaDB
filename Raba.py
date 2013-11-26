@@ -208,8 +208,9 @@ class _RabaSingleton_MetaClass(type) :
 			if key in cls._instances :
 				return cls._instances[key]
 			
-			obj = type.__call__(cls, initDbLine = dbLine, **fieldsDct)	
-			cls._instances[key] = obj					
+			obj = type.__call__(cls, initDbLine = dbLine, **fieldsDct)
+			cls._instances[key] = obj
+			
 		elif len(params) > 0 :
 			raise KeyError("Couldn't find any object that fit the arguments you've prodided to the constructor")
 			#obj = type.__call__(cls, **fieldsDct)
@@ -245,7 +246,7 @@ class RabaPupa(object) :
 		uniqueId = getAttr('raba_id')
 		connection = RabaConnection(getAttr('_raba_namespace'))
 		dbLine = connection.getRabaObjectInfos(getAttr('_rabaClass').__name__, {'raba_id' : uniqueId}).fetchone()
-
+		
 		setAttr('__class__', rabaClass)
 		purge = getAttr('__dict__').keys()
 		for k in purge :
@@ -256,13 +257,14 @@ class RabaPupa(object) :
 		return object.__getattribute__(self, name)
 	
 	def __repr__(self) :
-		return "<Raba pupa: %s, raba_id %s>" % (self._rabaClass.__name__, self.raba_id)
+		return "<RabaObj pupa: %s, raba_id %s>" % (self._rabaClass.__name__, self.raba_id)
 
 class Raba(object):
 	"All raba object inherit from this class"	
 	__metaclass__ = _RabaSingleton_MetaClass
 	
 	def _initDbLine(self, dbLine) :
+		self.raba_id = dbLine[self.__class__.columns['raba_id']]
 		for kk, i in self.columns.items() :
 			k = self.columnsToLowerCase[kk.lower()]
 			elmt = getattr(self._rabaClass, k)
@@ -282,14 +284,7 @@ class Raba(object):
 				self.__setattr__(k, rlp)
 			else :
 				raise ValueError("Unable to set field %s to %s in Raba object %s" %(k, dbLine[i], self._rabaClass.__name__))
-	
-	def _initWithDct(self, dct) :
-		for k, v in dct.items() :
-			if k.lower() in self.columns : 
-				self.__setattr__(k, v)
-			else :
-				raise KeyError("Raba object %s has no field %s" %(self._rabaClass.__name__, k))
-	
+
 	def __init__(self, **fieldsSet) :
 		
 		if self.__class__ == Raba :
@@ -302,9 +297,7 @@ class Raba(object):
 		
 		if 'initDbLine' in fieldsSet and 'initDbLine' != None :
 			self._initDbLine(fieldsSet['initDbLine'])
-		else :
-			self._initWithDct(fieldsSet)
-		
+
 		self._runtimeId = (self.__class__.__name__, random.random()) #this is using only during runtime ex, to avoid circular calls
 		self.mutated = True #True if needs to be saved
 
@@ -427,6 +420,7 @@ class Raba(object):
 		elmt = object.__getattribute__(self, k)
 		if RabaFields.typeIsRabaList(elmt) : #if empty
 			elmt = RabaListPupa(anchorObj = self, relationName = k)
+			object.__setattr__(self, k, elmt)
 		elif RabaFields.isField(elmt) :
 			elmt = elmt.default
 		
@@ -456,7 +450,6 @@ class RabaListPupa(MutableSequence) :
 	__metaclass__ = RabaListPupaSingleton_Metaclass
 
 	def __init__(self, **kwargs) :
-		
 		self.anchorObj = kwargs['anchorObj']
 		self.relationName = kwargs['relationName']
 		self._raba_namespace = self.anchorObj._raba_namespace
@@ -491,8 +484,8 @@ class RabaListPupa(MutableSequence) :
 		for k in purge :
 			delattr(self, k)
 		
-		RabaList.__init__(self, raba_id = raba_id, namespace = namespace, anchorObj = anchorObj, tableName = tableName)
-	
+		RabaList.__init__(self, raba_id = raba_id, namespace = namespace, anchorObj = anchorObj, relationName = relName, tableName = tableName)
+		
 	def __getitem__(self, i) :
 		self._morph()
 		return self[i]
@@ -504,10 +497,14 @@ class RabaListPupa(MutableSequence) :
 	def __setitem__(self, k, v) :
 		self._morph()
 		self.__setitem__(k, v)
-			
-	def insert(k, i, v) :
+	
+	def insert(self, k, i, v) :
 		self._morph()
 		self.insert(i, v)
+	
+	def append(self, k) :
+		self._morph()
+		self.append(k)
 	
 	def _attachToObject(self, *args, **kwargs) :
 		"dummy fct for compatibility reasons, a RabaListPupa is attached by default"
@@ -526,7 +523,7 @@ class RabaListPupa(MutableSequence) :
 		return MutableSequence.__getattribute__(self, name)
 
 	def __repr__(self) :
-		return "[RLPupa length: %d, relationName: %s, anchorObj: %s, raba_id: %s]" % (self.length, self.relationName, self.anchorObj, self.raba_id)
+		return "[RPupa length: %d, relationName: %s, anchorObj: %s, raba_id: %s]" % (self.length, self.relationName, self.anchorObj, self.raba_id)
 
 	def __len__(self) :
 		return self.length
@@ -538,8 +535,7 @@ class RabaList(MutableSequence) :
 	_isRabaList = True
 	__metaclass__ = RabaListSingleton_Metaclass
 	
-	def _checkElmt(self, v, namespace = None) :
-		#print '------', getattr(self.anchorObj._rabaClass, self.relationName).check(v)
+	def _checkElmt(self, v) :
 		if self.anchorObj != None :
 			return getattr(self.anchorObj._rabaClass, self.relationName).check(v)
 		else :
@@ -567,34 +563,26 @@ class RabaList(MutableSequence) :
 		self.raba_id = None
 		self.relationName = None
 		self.tableName = None
+		self.anchorObj = None
 		
-		if 'anchorObj' in listArguments and listArguments['anchorObj'] != None :
-			self.anchorObj = listArguments['anchorObj']
-		else :
-			self.anchorObj = None
+		self._raba_namespace = None
+		self.connection = None
+		self.rabaConfiguration = None
 		
-		if 'namespace' in listArguments and listArguments['namespace'] != None :
-			self._setNamespaceConAndConf(listArguments['namespace'])
-		else :
-			self._raba_namespace = None
-			self.connection = None
-			self.rabaConfiguration = None
-			
-		#if 'noInitCheck' not in listArguments and len(listElements) > 0:
-			#faultyElement = self._checkSelf(listElements[0])
-			#if faultyElement != None :
-			#	self._dieInvalidRaba(faultyElement)
-		
-			#if self._raba_namespace != None and namespace != None and namespace != self._raba_namespace :
-			#	raise TypeError("Defined namespace %s != elements namespace %s") %(self._raba_namespace, namespace)
-			#elif self._raba_namespace == None and namespace != None :
-			#	self._setNamespaceConAndConf(namespace)
-			
 		if len(listElements) > 0 :
 			self.data = list(listElements[0])
 		else :
 			self.data = []
+			
+		if 'anchorObj' in listArguments and listArguments['anchorObj'] != None :
+			self.anchorObj = listArguments['anchorObj']
 		
+		if 'namespace' in listArguments and listArguments['namespace'] != None :
+			self._setNamespaceConAndConf(listArguments['namespace'])
+		
+		if 'relationName' in listArguments and listArguments['relationName'] != None :
+			self.relationName = listArguments['relationName']
+			
 		if 'raba_id' in listArguments and listArguments['raba_id'] != None :
 			if self.connection == None :
 				raise ValueError('Unable to set list, i have an id but no namespace')
@@ -609,18 +597,22 @@ class RabaList(MutableSequence) :
 			for aidi in cur :
 				value = aidi[2]
 				typ = aidi[3]
+				className = aidi[4]
+				raba_id = aidi[5]
+				raba_namespace = aidi[6]
 				if typ == RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE :
 					self.append(value)
 				elif typ == RabaFields.RABA_FIELD_TYPE_IS_RABA_LIST :
 					raise FutureWarning('RabaList in RabaList not supported')
 				elif typ == RabaFields.RABA_FIELD_TYPE_IS_RABA_OBJECT :
-					val = json.loads(value)
-					classObj = RabaConnection(value['raba_namespace']).getClass(val["className"])
-					self.append(RabaPupa(classObj, val["raba_id"]))
+					#print value
+					#val = json.loads(value)
+					classObj = RabaConnection(raba_namespace).getClass(className)
+					self.append(RabaPupa(classObj, raba_id))
 				else :
 					raise ValueError("Unknown type: %s in rabalist %s" % (typ, self))
-
-		self._runtimeId = (self.__class__.__name__, random.random())#this is using only during runtime ex, to avoid circular calls
+		
+		self._runtimeId = (self.__class__.__name__, random.random())#this is used only during runtime ex, to avoid circular calls
 		self.mutated = True #True if needs to be saved
 		
 	def pupatizeElements(self) :
@@ -654,13 +646,14 @@ class RabaList(MutableSequence) :
 			for e in self.data :
 				if isRabaObject(e) :
 					e.save()
-					values.append((self.anchorObj.raba_id, e.getJsonEncoding(), RabaFields.RABA_FIELD_TYPE_IS_RABA_OBJECT))
+					objDct = e.getDctDescription()
+					values.append((self.anchorObj.raba_id, None, RabaFields.RABA_FIELD_TYPE_IS_RABA_OBJECT, e._rabaClass.__name__, e.raba_id, e._raba_namespace))
 				elif isPythonPrimitive(e) :
-					values.append((self.anchorObj.raba_id, e, RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE))
+					values.append((self.anchorObj.raba_id, e, RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE), None, None, None)
 				else :
-					values.append((self.anchorObj.raba_id, buffer(cPickle.dumps(e)), RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE))
+					values.append((self.anchorObj.raba_id, buffer(cPickle.dumps(e)), RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE, None, None, None))
 			
-			self.connection.cursor().executemany('INSERT INTO %s (anchor_raba_id, value, type) VALUES (?, ?, ?)' % self.tableName, values)
+			self.connection.cursor().executemany('INSERT INTO %s (anchor_raba_id, value, type, obj_raba_class_name, obj_raba_id, obj_raba_namespace) VALUES (?, ?, ?, ?, ?, ?)' % self.tableName, values)
 			#self.connection.commit()
 			
 			self.connection.updateRabaListLength(self.raba_id, len(self))
@@ -699,7 +692,7 @@ class RabaList(MutableSequence) :
 		self.mutated = True
 		
 	def append(self, v) :
-		if not self._checkElmt(v, self._raba_namespace) :
+		if not self._checkElmt(v) :
 			self._dieInvalidRaba(v)
 		
 		if self._raba_namespace == None and isRabaObject(v) :
@@ -742,4 +735,4 @@ class RabaList(MutableSequence) :
 		return len(self.data)
 			
 	def __repr__(self) :
-		return '[RL raba_id: %s, len: %d, anchor: %s, table: %s]' % (self.raba_id, len(self), self.anchorObj, self.tableName)
+		return '[R raba_id: %s, len: %d, anchor: %s, table: %s]' % (self.raba_id, len(self), self.anchorObj, self.tableName)
