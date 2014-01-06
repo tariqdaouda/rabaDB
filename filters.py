@@ -23,7 +23,7 @@ class RabaQuery :
 		
 		self.rabaClass = rabaClass
 		self.filters = []
-		self.tables = []
+		self.tables = set()
 		
 		self._raba_namespace = self.rabaClass._raba_namespace
 		self.con = RabaConnection(self._raba_namespace)
@@ -117,10 +117,10 @@ class RabaQuery :
 		conditions = []
 		
 		currClass = self.rabaClass
-		self.tables.append(currClass.__name__)
+		self.tables.add(currClass.__name__)
 		for f in fields[:1] :
 			attr = testAttribute(currClass, f)
-			self.tables.append(attr.objClassName)
+			self.tables.add(attr.objClassName)
 			conditions.append('%s.%s = %s.json' %(currClass.__name__, f, attr.objClassName))
 			
 			currClass = self.con.getClass(attr.objClassName)
@@ -136,7 +136,7 @@ class RabaQuery :
 		else :
 			raise ValueError('Invalid query ending with %s' % field[-1])
 			
-		self.tables.append(attr.objClassName)
+		self.tables.add(attr.objClassName)
 		self.filters.append({ '%s %s' % (' AND '.join(conditions), lastOperator) : value})
 		
 	def run(self, returnSQL = False) :
@@ -156,7 +156,7 @@ class RabaQuery :
 			tablesStr =  ', '.join(self.tables)
 		
 		sql = 'SELECT %s.raba_id from %s WHERE %s' % (self.rabaClass.__name__, tablesStr, sqlFilters)
-		#print sql, sqlValues
+		print sql, sqlValues
 		cur = self.con.cursor()
 		cur.execute(sql, sqlValues)
 		
@@ -213,5 +213,5 @@ if __name__ == '__main__' :
 	
 	rq = RabaQuery(A)
 	rq.addFilter(**{'b->c' : c})
-	#rq.addFilter(['b->c.name = C'])
+	rq.addFilter(['b->c.name = C'])
 	print rq.run()
