@@ -57,18 +57,24 @@ class PrimitiveField(RabaField) :
 class RabaObjectField(RabaField) :
 	_raba_type = RABA_FIELD_TYPE_IS_RABA_OBJECT
 	
-	def __init__(self, objClassName = None, default = None, constrainFct = None, **constrainFctWArgs) :
+	def __init__(self, objClassName = None, objClassNamespace = None, default = None, constrainFct = None, **constrainFctWArgs) :
 		
 		if default != None and not isRabaObject(default) :
 			raise ValueError("Default value is not a valid Raba Object")
 		
 		RabaField.__init__(self,  default, constrainFct, **constrainFctWArgs)
 		self.objClassName = objClassName
+		self.objClassNamespace = objClassNamespace
 		
 	def check(self, val) :
 		if val == self.default and self.default == None :
 			return True
-		return Raba.isRabaObject(val) and ((self.objClassName != None and val._rabaClass.__name__ == self.objClassName) or self.objClassName == None) and RabaField.check(self, val)
+		retVal =  Raba.isRabaObject(val) and ((self.objClassName != None and val._rabaClass.__name__ == self.objClassName) or self.objClassName == None) and RabaField.check(self, val)
+		
+		if self.objClassNamespace == None :
+			return retVal
+		else :
+			return retVal and val._raba_namespace == self.objClassNamespace
 
 	def __repr__(self) :
 		return '<field %s, class: %s , default: %s>' % (self.__class__.__name__, self.objClassName, self.default)

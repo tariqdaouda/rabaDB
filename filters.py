@@ -8,31 +8,31 @@ import fields as RabaFields
 #
 #get all exons of a given transcript
 #f = RabaQuery(namespace, Exon)
-#f.addFilter(**{'transcript' : transcript})
+#f.addFilter(**{'transcript' : myTrans})
+#f.addFilter(transcript = myTrans)
+#f.addFilter("transcript = myTrans")
 #exons = f.run()
-
-#TODO JOINTS:
-#
-#get all exons of a given transcript
-#f = RabaQuery(namespace, Exon)
-#f.addFilter(**{'transcript->gene' : gene})
-#exons = f.run()
-#select * from exon where exon.transcript_id = transcript.id and transcript.gene_id = gene.id
 
 class RabaQuery :
+
+	def __init__(self, rabaClass) :
+		self.reset(rabaClass)
 	
-	def __init__(self, namespace, rabaType) :
-		self.rabaType = rabaType
-		self.filters = {}
-		self._raba_namespace = namespace
+	def reset(self, rabaClass) :
+		assert isRabaClass(rabaClass)
+		
+		self.rabaClass = rabaClass
+		self.filters = []
+		self.tables = []
+		
+		self._raba_namespace = self.rabaClass._raba_namespace
 		self.con = RabaConnection(self._raba_namespace)
 		
-		self.fctPattern = re.compile("\s*([^\s]+)\s*\(\s*([^\s]+)\s*\)\s*([=><])\s*([^\s]+)\s*")
+		#self.fctPattern = re.compile("\s*([^\s]+)\s*\(\s*([^\s]+)\s*\)\s*([=><])\s*([^\s]+)\s*")
 		self.fieldPattern = re.compile("\s*([^\s\(\)]+)\s*([=><]|([L|l][I|i][K|k][E|e]))\s*(.+)")
+		self.operators = set(['LIKE', '=', '<', '>', 'IS'])
 		
-		self.supportedFunctions = set(('count', ))
-	
-	def addFilter(self, *lstFilters, **dctFilters) :
+	def addFilter_bck(self, *lstFilters, **dctFilters) :
 		"add a new filter to the query"
 		filters = {}
 		for v in lstFilters :
@@ -59,69 +59,159 @@ class RabaQuery :
 				vv = v
 			
 			filters[res[0]] = vv
-		self.filters[len(self.filters) +1] = filters
-	
-	def _parseInput(self, wholeStr) :
-		res = self._parseField(wholeStr)
-		if res == None :
-			res = self._parseFct(wholeStr)
-			if res == None :
-				raise ValueError("RabaQuery Error: Invalid filter '%s'" % wholeStr)
-		return res
-	
-	def _parseField(self, wholeStr)	:
-		match = self.fieldPattern.match(wholeStr)
-		if match == None :
-			return None
+		self.filters.append(filters)
 
-		field = match.group(1)
-		operator = match.group(2)
-		value = match.group(4)
-		if not hasattr(self.rabaType, field) :
-			raise KeyError("RabaQuery Error: type '%s' has no field %s" % (self.rabaType.__name__, field))
+	def addFilter(self, *lstFilters, **dctFilters) :
+		"add a new filter to the query"
 		
-		return '%s %s' %(field, operator), value
-		
-	def _parseFct(self, wholeStr) :
-		
-		match = self.fctPattern.match(wholeStr)
-		if match == None :
-			return False
+		for k, v in dctFilters.iteritems() :
+			sk = k.split(' ')
+			if len(sk) == 2 :
+				operator = sk[-1].strip()
+				if operator not in self.operators :
+					raise ValueError('Unrecognized operator %s' % operator)
+				kk = '%s.%s'% (self.rabaClass.__name__, k)
+			elif len(sk) == 1 :
+				operator = "="
+				kk = '%s.%s ='% (self.rabaClass.__name__, k)
+			else :
+				raise ValueError('Invalid field %s' % k)
+			
+			if isRabaObject(v) :
+				vv = v.getJsonEncoding()
+			else :
+				vv = v
+				
+			if sk[0].find('->') > -1 :
+				self._parseJoint(sk[0], operator, vv)
+			else :
+				self.filters.append({kk : vv})
 
-		fctName = match.group(1)
-		field = match.group(2)
-		operator = match.group(3)
-		value = match.group(4)
+		for lt in lstFilters :
+			for l in lt : 
+				match = self.fieldPattern.match(l)
+				if match == None :
+					raise ValueError("RabaQuery Error: Invalid filter '%s'" % l)
+				
+				field = match.group(1)
+				operator = match.group(2)
+				value = match.group(4)
+				
+				if field.find('->') > -1 :
+					self._parseJoint(field, operator, value)
+				else :
+					self.filters.append({'%s.%s %s' %(self.rabaClass.__name__, field, operator) : value})
+			
+	def _parseJoint(self, strJoint, lastOperator, value) :
+		def testAttribute(currClass, field) :
+			attr = getattr(currClass, field)
+			assert RabaFields.typeIsRabaObject(attr)
+			if attr.objClassName == None :
+				raise ValueError('Attribute %s has no mandatory RabaClass' % field)
 
-		if not hasattr(self.rabaType.__class__, field) or not RabaFields.isField(getattr(self.rabaType.__class__, field)) :
-			raise KeyError("RabaQuery Error: type '%s' has no field %s" % (self.rabaType.__name__, field))
-		if not RabaFields.typeIsRabaList(getattr(self.rabaType.__class__, field)) :
-			raise TypeError("RabaQuery Error: the parameter of '%s' must be a RabaList" % fctName.upper())
+			if attr.objClassNamespace != None and attr.objClassNamespace != self._raba_namespace :
+				raise ValueError("Can't perform joints accros namespaces. My namespace is: '%s', %s->%s's is: '%s'" % (self._raba_namespace, currClass.__name__, attr.objClassName, attr.objClassNamespace))
+			return attr
 		
-		if fctName.lower() == 'count' :
-			return '%s %s' %(field, operator), value
+		fields = strJoint.split('->')
+		conditions = []
+		
+		currClass = self.rabaClass
+		self.tables.append(currClass.__name__)
+		for f in fields[:1] :
+			attr = testAttribute(currClass, f)
+			self.tables.append(attr.objClassName)
+			conditions.append('%s.%s = %s.json' %(currClass.__name__, f, attr.objClassName))
+			
+			currClass = self.con.getClass(attr.objClassName)
+		
+		lastField = fields[-1].split('.')
+		
+		attr = testAttribute(currClass, lastField[0])
+		conditions.append('%s.%s = %s.json' %(currClass.__name__, lastField[0], attr.objClassName))
+		if len(lastField) == 2 :
+			conditions.append('%s.%s' %(attr.objClassName, lastField[-1]))
+		elif len(lastField) == 1 :
+			conditions.append('%s' %(attr.objClassName))
 		else :
-			raise ValueError("RabaQuery Error: Unknown function %s" % fctName.upper())
-
+			raise ValueError('Invalid query ending with %s' % field[-1])
+			
+		self.tables.append(attr.objClassName)
+		self.filters.append({ '%s %s' % (' AND '.join(conditions), lastOperator) : value})
+		
 	def run(self, returnSQL = False) :
 		"Runs the query and returns the result"
 		sqlFilters = []
 		sqlValues = []
-		for f in self.filters.values() :
+		#print self.filters
+		for f in self.filters :
 			sqlFilters.append('(%s ?)' % ' ? AND '.join(f.keys()))
 			sqlValues.extend(f.values())
-			
-		sqlFilters = ' OR '.join(sqlFilters)
-		sql = 'SELECT raba_id from %s WHERE %s' % (self.rabaType.__name__, sqlFilters)
+		
+		sqlFilters =' OR '.join(sqlFilters)
+		
+		if len(self.tables) < 2 :
+			tablesStr = self.rabaClass.__name__
+		else :
+			tablesStr =  ', '.join(self.tables)
+		
+		sql = 'SELECT %s.raba_id from %s WHERE %s' % (self.rabaClass.__name__, tablesStr, sqlFilters)
 		#print sql, sqlValues
 		cur = self.con.cursor()
 		cur.execute(sql, sqlValues)
 		
 		res = []
 		for v in cur :
-			res.append(RabaPupa(self.rabaType, v[0]))
+			res.append(RabaPupa(self.rabaClass, v[0]))
 		
 		if returnSQL :
 			return (res, sql)
 		else :
 			return res
+
+if __name__ == '__main__' :
+	import unittest
+	RabaConfiguration('test', './dbTest_filters.db')
+	
+	class A(Raba) :
+		_raba_namespace = 'test'
+		name = RabaFields.PrimitiveField(default = 'A')
+		b = RabaFields.RabaObjectField('B')
+		_raba_uniques = ['name']
+		
+		def __init__(self, **fieldsSet) :
+			Raba.__init__(self, **fieldsSet)
+	
+	class B(Raba) :
+		_raba_namespace = 'test'
+		name = RabaFields.PrimitiveField(default = 'B')
+		c = RabaFields.RabaObjectField('C')
+		_raba_uniques = ['name']
+		
+		def __init__(self, **fieldsSet) :
+			Raba.__init__(self, **fieldsSet)
+	
+	class C(Raba) :
+		_raba_namespace = 'test'
+		name = RabaFields.PrimitiveField(default = 'C')
+		a = RabaFields.RabaObjectField('A')
+		_raba_uniques = ['name']
+		
+		def __init__(self, **fieldsSet) :
+			Raba.__init__(self, **fieldsSet)
+
+	a = A()
+	b = B()
+	c = C()
+	
+	a.b = b
+	b.c = c
+	c.a = a
+	
+	a.save()
+	
+	
+	rq = RabaQuery(A)
+	rq.addFilter(**{'b->c' : c})
+	#rq.addFilter(['b->c.name = C'])
+	print rq.run()

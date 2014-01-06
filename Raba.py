@@ -10,6 +10,9 @@ def makeRabaObjectSingletonKey(clsName, namespace, raba_id) :
 
 def isRabaObject(v) :
 	return hasattr(v, '_rabaClass')
+
+def isRabaClass(v) :
+	return Raba in v.__bases__
 	
 def isRabaList(v) :
 	return hasattr(v.__class__, '_isRabaList') and v._isRabaList
@@ -85,7 +88,6 @@ class RabaListSingleton_Metaclass(abc.ABCMeta):
 		
 			clsObj._instances[key] = super(RabaList_Metaclass, clsObj).__call__(*args, **kwargs)
 		
-			#if len(clsObj._instances[key]) > 0 :
 			return clsObj._instances[key]
 		return super(RabaListSingleton_Metaclass, clsObj).__call__(*args, **kwargs)
 
@@ -112,22 +114,19 @@ class _RabaSingleton_MetaClass(type) :
 			uniqueStr = ''
 			if '_raba_uniques' in dct :
 				for c in dct['_raba_uniques'] :
-					if len(c) > 1 :
-						uniqueStr += 'UNIQUE%s ON CONFLICT REPLACE, ' % str(c)
-					else :
-						uniqueStr += 'UNIQUE(%s) ON CONFLICT REPLACE, ' % str(c[0])
+					uniqueStr += 'UNIQUE(%s) ON CONFLICT REPLACE, ' % str(c)
 					
 			uniqueStr = uniqueStr[:-2]
 	
 			if not con.tableExits(name) :
-				idStr = 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT'
+				idJsonStr = 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT, json '
 				if len(fields) > 0 :
 					if len(uniqueStr) > 0 :
-						con.createTable(name, '%s, %s, %s' % (idStr, ', '.join(list(fields)), uniqueStr))
+						con.createTable(name, '%s, %s, %s' % (idJsonStr, ', '.join(list(fields)), uniqueStr))
 					else :
-						con.createTable(name, '%s, %s' % (idStr, ', '.join(list(fields))))
+						con.createTable(name, '%s, %s' % (idJsonStr, ', '.join(list(fields))))
 				else :
-					con.createTable(name, '%s' % idStr)
+					con.createTable(name, '%s' % idJsonStr)
 				
 				sqlCons =  'INSERT INTO raba_tables_constraints (table_name, constraints) VALUES (?, ?)'
 				con.cursor().execute(sqlCons, (name, uniqueStr))
@@ -170,7 +169,6 @@ class _RabaSingleton_MetaClass(type) :
 			dct['columnsToLowerCase'] = columnsToLowerCase
 			
 			clsObj = type.__new__(cls, name, bases, dct)
-			#RabaConfiguration(dct['_raba_namespace']).registerRabaClass(clsObj)
 			con.registerRabaClass(clsObj)
 			return clsObj
 		
@@ -213,7 +211,6 @@ class _RabaSingleton_MetaClass(type) :
 			
 		elif len(params) > 0 :
 			raise KeyError("Couldn't find any object that fit the arguments you've prodided to the constructor")
-			#obj = type.__call__(cls, **fieldsDct)
 		else :
 			obj = type.__call__(cls, **fieldsDct)
 		
@@ -353,10 +350,14 @@ class Raba(object):
 				if self.raba_id == None :
 					sql = 'INSERT INTO %s (%s) VALUES (%s)' % (self.__class__.__name__, ','.join(fields), ','.join(['?' for i in range(len(fields))]))
 					cur.execute(sql, values)
-					object.__setattr__(self, 'raba_id', cur.lastrowid)
+					self.raba_id = cur.lastrowid
 					key = makeRabaObjectSingletonKey(self._rabaClass.__name__, self._raba_namespace, self.raba_id)
 					_RabaSingleton_MetaClass._instances[key] = self
+					sql = 'UPDATE %s SET json = ? WHERE raba_id=?' % self.__class__.__name__
+					cur.execute(sql, (self.getJsonEncoding(), self.raba_id))
 				else :
+					values.append(self.getJsonEncoding())
+					fields.append('json')
 					values.append(self.raba_id)
 					sql = 'UPDATE %s SET %s = ? WHERE raba_id = ?' % (self.__class__.__name__, ' = ?, '.join(fields))
 					cur.execute(sql, values)

@@ -4,9 +4,17 @@ import rabaDB.Raba as R
 from rabaDB.filters import *
 from rabaDB.fields import *
 
+class transcript(R.Raba) :
+	_raba_namespace = 'test'
+	name = PrimitiveField(default = '')
+	gene = RabaObjectField('gene')
+	def __init__(self, **fieldsSet) :
+		R.Raba.__init__(self, **fieldsSet)
+		
 class Gene(R.Raba) :
 	_raba_namespace = 'test'
 	name = PrimitiveField(default = '')
+	chromosome = RabaObjectField('Chromosome')
 	def __init__(self, **fieldsSet) :
 		R.Raba.__init__(self, **fieldsSet)
 
@@ -40,13 +48,16 @@ print chro.genes
 print '\nsave the chromosome'
 chro.save()
 
+f = RabaQuery('test', transcript)
+f.addFilter(**{'gene->chromosome.id' : "22"})
+print f.run()
 '''
 #---------
 #Different types of equivalent queries
 #---------
 
 f = RabaQuery('test', Chromosome)
-f.addFilter(**{'id' : '= "22"'})
+f.addFilter(**{'id' : "22"})
 f.addFilter(['id = "22"', 'count(genes) = 4'])
 f.addFilter('count(genes) = 4', id = '= "22"')
 for chro2 in f.run() :
