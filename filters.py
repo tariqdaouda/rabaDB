@@ -5,13 +5,31 @@ from Raba import *
 import fields as RabaFields
 
 #Usage:
-#
+#########
+#Equivalent queries
+#########
 #get all exons of a given transcript
 #f = RabaQuery(namespace, Exon)
+#
 #f.addFilter(**{'transcript' : myTrans})
 #f.addFilter(transcript = myTrans)
 #f.addFilter("transcript = myTrans")
 #exons = f.run()
+#
+#of a given chromosome
+#query by number
+#f.addFilter("transcript->gene->chromosome = 22")
+#query by object
+#f.addFilter(**{'transcript->gene->chromosome' : myChro})
+#exons = f.run()
+#
+##########
+# AND/OR
+##########
+#f.addFilter(A1, A2, A3)
+#f.addFilter(B1, B2)
+#
+#Means: (A1 AND A2 AND A3) OR (B1 AND B2)
 
 class RabaQuery :
 
@@ -63,7 +81,6 @@ class RabaQuery :
 
 	def addFilter(self, *lstFilters, **dctFilters) :
 		"add a new filter to the query"
-		
 		for k, v in dctFilters.iteritems() :
 			sk = k.split(' ')
 			if len(sk) == 2 :
