@@ -137,9 +137,9 @@ class RabaQuery :
 			
 		self.tables.add(attr.className)
 		self.filters.append({ '%s %s' % (' AND '.join(conditions), lastOperator) : value})
-		
-	def run(self, returnSQL = False) :
-		"Runs the query and returns the result"
+	
+	def getSQLQuery(self) :
+		"Returns the query without performing it"
 		sqlFilters = []
 		sqlValues = []
 		#print self.filters
@@ -155,7 +155,24 @@ class RabaQuery :
 			tablesStr =  ', '.join(self.tables)
 		
 		sql = 'SELECT %s.raba_id from %s WHERE %s' % (self.rabaClass.__name__, tablesStr, sqlFilters)
-		print sql, sqlValues
+		#print sql, sqlValues
+		
+		return (sql, sqlValues)
+	
+	def iterRun(self) :
+		"""Runs the query and returns an iterator. This much more efficient for large sets of data but 
+		yyou get results one by one."""
+		
+		sql, sqlValues = self.getSQLQuery()
+		cur = self.con.cursor()
+		cur.execute(sql, sqlValues)
+		
+		for v in cur :
+			yield RabaPupa(self.rabaClass, v[0])
+		
+	def run(self) :
+		"Runs the query and returns the entire result"
+		sql, sqlValues = self.getSQLQuery()
 		cur = self.con.cursor()
 		cur.execute(sql, sqlValues)
 		
@@ -163,10 +180,7 @@ class RabaQuery :
 		for v in cur :
 			res.append(RabaPupa(self.rabaClass, v[0]))
 		
-		if returnSQL :
-			return (res, sql)
-		else :
-			return res
+		return res
 
 if __name__ == '__main__' :
 	#import unittest
@@ -203,4 +217,5 @@ if __name__ == '__main__' :
 	rq = RabaQuery(A)
 	rq.addFilter({'b->c' : c})
 	#rq.addFilter(['b->c.name = C'])
-	print rq.run()
+	for a in rq.run() :
+		print a
