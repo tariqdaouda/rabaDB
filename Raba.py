@@ -164,7 +164,7 @@ class _RabaSingleton_MetaClass(type) :
 				#con.commit()
 			
 			columns['raba_id'] = 0
-			dct['raba_id'] = RabaFields.PrimitiveField()
+			dct['raba_id'] = RabaFields.Primitive()
 			dct['columns'] = columns 
 			dct['columnsToLowerCase'] = columnsToLowerCase
 			
@@ -206,13 +206,15 @@ class _RabaSingleton_MetaClass(type) :
 			if key in cls._instances :
 				return cls._instances[key]
 			
-			obj = type.__call__(cls, initDbLine = dbLine, **fieldsDct)
+			obj = type.__call__(cls)
+			obj._raba__init__(initDbLine = dbLine, **fieldsDct)
 			cls._instances[key] = obj
 			
 		elif len(params) > 0 :
 			raise KeyError("Couldn't find any object that fit the arguments you've prodided to the constructor")
 		else :
 			obj = type.__call__(cls, **fieldsDct)
+			obj._raba__init__(**fieldsDct)
 		
 		return obj
 
@@ -265,25 +267,24 @@ class Raba(object):
 		for kk, i in self.columns.items() :
 			k = self.columnsToLowerCase[kk.lower()]
 			elmt = getattr(self._rabaClass, k)
-			if RabaFields.typeIsPrimitive(elmt) :
+			if RabaFields.fieldIsPrimitive(elmt) :
 				try :
 					self.__setattr__(k, cPickle.loads(str(dbLine[i])))
 				except :
 					self.__setattr__(k, dbLine[i])
 			
-			elif RabaFields.typeIsRabaObject(elmt) :
+			elif RabaFields.fieldIsRabaObjectt(elmt) :
 				if dbLine[i] != None :
 					val = json.loads(dbLine[i])
 					objClass = RabaConnection(val["raba_namespace"]).getClass(val["className"])
 					self.__setattr__(k, RabaPupa(objClass, val["raba_id"]))
-			elif RabaFields.typeIsRabaList(elmt) :
+			elif RabaFields.fieldIsRabaList(elmt) :
 				rlp = RabaListPupa(anchorObj = self, relationName = k)
 				self.__setattr__(k, rlp)
 			else :
 				raise ValueError("Unable to set field %s to %s in Raba object %s" %(k, dbLine[i], self._rabaClass.__name__))
 
-	def __init__(self, **fieldsSet) :
-		
+	def _raba__init__(self, **fieldsSet) :
 		if self.__class__ == Raba :
 			raise TypeError('Raba class should never be instanciated, use inheritance')
 
@@ -323,23 +324,23 @@ class Raba(object):
 			for k, valType in self.__class__.__dict__.items() :
 				if RabaFields.isField(valType) and k != 'raba_id':
 					val = getattr(self, k)
-					if not RabaFields.typeIsRabaList(valType) and val is valType and self.mutated :
+					if not RabaFields.fieldIsRabaList(valType) and val is valType and self.mutated :
 						values.append(valType.default)
 						fields.append(k)
-					elif RabaFields.typeIsPrimitive(valType) and self.mutated :
+					elif RabaFields.fieldIsPrimitive(valType) and self.mutated :
 						if isPythonPrimitive(val):
 							values.append(val)
 						else :
 							values.append(buffer(cPickle.dumps(val)))
 						fields.append(k)
 					
-					elif RabaFields.typeIsRabaObject(valType) :
+					elif RabaFields.fieldIsRabaObjectt(valType) :
 						if val != None :
 							val.save()
 							values.append(val.getJsonEncoding())
 							fields.append(k)
 				
-					elif RabaFields.typeIsRabaList(valType) :
+					elif RabaFields.fieldIsRabaList(valType) :
 						if isRabaList(val) :
 							if val.mutated :
 								listsToSave.append(val)
@@ -374,6 +375,13 @@ class Raba(object):
 			return True
 		return False
 	
+	def delete(self) :
+		if self.raba_id != None :
+			sql = 'DELETE FROM %s WHERE raba_id = ?' % self._rabaClass.__name__
+			cur = self.connection.cursor()
+			cur.execute(sql, (self.raba_id, ))
+			self.connection.commit()
+		
 	def copy(self) :
 		v = copy.copy(self)
 		v.raba_id = None
@@ -395,7 +403,7 @@ class Raba(object):
 	def __setattr__(self, k, v) :
 		vv = v
 		if hasattr(self.__class__, k) and RabaFields.isField(getattr(self.__class__, k)) :
-			if not RabaFields.typeIsRabaList(getattr(self.__class__, k)) :
+			if not RabaFields.fieldIsRabaList(getattr(self.__class__, k)) :
 				classType = getattr(self.__class__, k)
 				if not classType.check(vv) :
 					raise ValueError("Unable to set '%s' to value '%s'. Constrain function violation" % (k, vv))
@@ -419,7 +427,7 @@ class Raba(object):
 	
 	def __getattribute__(self, k) :
 		elmt = object.__getattribute__(self, k)
-		if RabaFields.typeIsRabaList(elmt) : #if empty
+		if RabaFields.fieldIsRabaList(elmt) : #if empty
 			elmt = RabaListPupa(anchorObj = self, relationName = k)
 			object.__setattr__(self, k, elmt)
 		elif RabaFields.isField(elmt) :

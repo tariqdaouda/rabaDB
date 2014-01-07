@@ -25,7 +25,7 @@ class RabaField(object) :
 		
 		return self.constrainFct(val, **self.constrainFctWArgs)
 
-class RabaListField(RabaField) :
+class RList(RabaField) :
 	_raba_field = True
 	_raba_list = True
 	_raba_type = RABA_FIELD_TYPE_IS_RABA_LIST
@@ -34,15 +34,15 @@ class RabaListField(RabaField) :
 		RabaField.__init__(self, default = None, constrainFct = ElmtConstrainFct, **ElmtConstrainFctWArgs)
 		del(self.default)# = None
 
-class RabaRelationField(RabaListField) :
-	def __init__(self, objClassName = None, ElmtConstrainFct = None, **ElmtConstrainFctWArgs) :
-		self.objClassName = objClassName
-		RabaListField.__init__(self, ElmtConstrainFct, **ElmtConstrainFctWArgs)
+class Relation(RList) :
+	def __init__(self, className = None, ElmtConstrainFct = None, **ElmtConstrainFctWArgs) :
+		self.className = className
+		RList.__init__(self, ElmtConstrainFct, **ElmtConstrainFctWArgs)
 	
 	def check(self, val) :
-		return Raba.isRabaObject(val) and ((self.objClassName != None and val._rabaClass.__name__ == self.objClassName) or self.objClassName == None) and RabaListField.check(self, val)
+		return Raba.isRabaObject(val) and ((self.className != None and val._rabaClass.__name__ == self.className) or self.className == None) and RList.check(self, val)
 
-class PrimitiveField(RabaField) :
+class Primitive(RabaField) :
 	_raba_type = RABA_FIELD_TYPE_IS_PRIMITIVE
 	
 	def __init__(self, default = None, constrainFct = None, **constrainFctWArgs) :
@@ -54,41 +54,40 @@ class PrimitiveField(RabaField) :
 	def __repr__(self) :
 		return '<field %s, default: %s>' % (self.__class__.__name__, self.default)
 		
-class RabaObjectField(RabaField) :
+class RabaObject(RabaField) :
 	_raba_type = RABA_FIELD_TYPE_IS_RABA_OBJECT
 	
-	def __init__(self, objClassName = None, objClassNamespace = None, default = None, constrainFct = None, **constrainFctWArgs) :
-		
+	def __init__(self, className = None, classNamespace = None, default = None, constrainFct = None, **constrainFctWArgs) :
 		if default != None and not isRabaObject(default) :
 			raise ValueError("Default value is not a valid Raba Object")
 		
 		RabaField.__init__(self,  default, constrainFct, **constrainFctWArgs)
-		self.objClassName = objClassName
-		self.objClassNamespace = objClassNamespace
+		self.className = className
+		self.classNamespace = classNamespace
 		
 	def check(self, val) :
 		if val == self.default and self.default == None :
 			return True
-		retVal =  Raba.isRabaObject(val) and ((self.objClassName != None and val._rabaClass.__name__ == self.objClassName) or self.objClassName == None) and RabaField.check(self, val)
+		retVal =  Raba.isRabaObject(val) and ((self.className != None and val._rabaClass.__name__ == self.className) or self.className == None) and RabaField.check(self, val)
 		
-		if self.objClassNamespace == None :
+		if self.classNamespace == None :
 			return retVal
 		else :
-			return retVal and val._raba_namespace == self.objClassNamespace
+			return retVal and val._raba_namespace == self.classNamespace
 
 	def __repr__(self) :
-		return '<field %s, class: %s , default: %s>' % (self.__class__.__name__, self.objClassName, self.default)
+		return '<field %s, class: %s , default: %s>' % (self.__class__.__name__, self.className, self.default)
 
 	
 def isField(v) :
 	return hasattr(v.__class__, '_raba_field') and v.__class__._raba_field
 
-def typeIsPrimitive(v) :
+def fieldIsPrimitive(v) :
 	return hasattr(v.__class__, '_raba_type') and v.__class__._raba_type == RABA_FIELD_TYPE_IS_PRIMITIVE
 
-def typeIsRabaObject(v) :
+def fieldIsRabaObjectt(v) :
 	return hasattr(v.__class__, '_raba_type') and v.__class__._raba_type == RABA_FIELD_TYPE_IS_RABA_OBJECT
 
-def typeIsRabaList(v) :
+def fieldIsRabaList(v) :
 	return hasattr(v.__class__, '_raba_type') and v.__class__._raba_type == RABA_FIELD_TYPE_IS_RABA_LIST
 

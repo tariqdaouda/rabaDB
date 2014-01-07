@@ -6,25 +6,22 @@ from rabaDB.fields import *
 
 class transcript(R.Raba) :
 	_raba_namespace = 'test'
-	name = PrimitiveField(default = '')
-	gene = RabaObjectField('gene')
+	name = Primitive(default = '')
+	gene = RabaObject('gene')
 	def __init__(self, **fieldsSet) :
-		R.Raba.__init__(self, **fieldsSet)
-		
+
 class Gene(R.Raba) :
 	_raba_namespace = 'test'
-	name = PrimitiveField(default = '')
-	chromosome = RabaObjectField('Chromosome')
+	name = Primitive(default = '')
+	chromosome = RabaObject('Chromosome')
 	def __init__(self, **fieldsSet) :
-		R.Raba.__init__(self, **fieldsSet)
 
 class Chromosome(R.Raba) :
 	_raba_namespace = 'test'
-	id = PrimitiveField(default = '')
-	genes = RabaRelationField()
-	genes_2 = RabaListField()
+	id = Primitive(default = '')
+	genes = Relation()
+	genes_2 = RList()
 	def __init__(self, **fieldsSet) :
-		R.Raba.__init__(self, **fieldsSet)
 
 
 

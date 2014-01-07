@@ -122,7 +122,7 @@ class RabaConnection(object) :
 	def createTable(self, tableName, strFields) :
 		if not self.tableExits(tableName) :
 			sql = 'CREATE TABLE %s ( %s)' % (tableName, strFields)
-			#print sql
+			print sql
 			self.connection.cursor().execute(sql)
 			#self.connection.commit()
 			self.tables.add(tableName)
