@@ -40,7 +40,7 @@ class Relation(RList) :
 		RList.__init__(self, ElmtConstrainFct, **ElmtConstrainFctWArgs)
 	
 	def check(self, val) :
-		return Raba.isRabaObject(val) and ((self.className != None and val._rabaClass.__name__ == self.className) or self.className == None) and RList.check(self, val)
+		return (Raba.isRabaObject(val) or Raba.isRabaObjectPupa(val)) and ((self.className != None and val._rabaClass.__name__ == self.className) or self.className == None) and RList.check(self, val)
 
 class Primitive(RabaField) :
 	_raba_type = RABA_FIELD_TYPE_IS_PRIMITIVE
@@ -58,17 +58,25 @@ class RabaObject(RabaField) :
 	_raba_type = RABA_FIELD_TYPE_IS_RABA_OBJECT
 	
 	def __init__(self, className = None, classNamespace = None, default = None, constrainFct = None, **constrainFctWArgs) :
+		"""rabaClass can either be raba class of a string of a raba class name. In the latter case you must provide the namespace argument.
+		If it's a Raba Class the argument is ignored. If you fear cicular importants use strings"""
+		
 		if default != None and not isRabaObject(default) :
 			raise ValueError("Default value is not a valid Raba Object")
 		
 		RabaField.__init__(self,  default, constrainFct, **constrainFctWArgs)
-		self.className = className
-		self.classNamespace = classNamespace
+		if type(className) is not types.StringType :
+			assert isRabaClass(className)
+			self.className = RabaConnection(className._raba_namespace).getClass(className.__name__)
+			self.classNamespace = className._raba_namespace
+		else :
+			self.className = className
+			self.classNamespace = classNamespace
 		
 	def check(self, val) :
 		if val == self.default and self.default == None :
 			return True
-		retVal =  Raba.isRabaObject(val) and ((self.className != None and val._rabaClass.__name__ == self.className) or self.className == None) and RabaField.check(self, val)
+		retVal =  (Raba.isRabaObject(val) or Raba.isRabaObjectPupa(val)) and ((self.className != None and val._rabaClass.__name__ == self.className) or self.className == None) and RabaField.check(self, val)
 		
 		if self.classNamespace == None :
 			return retVal

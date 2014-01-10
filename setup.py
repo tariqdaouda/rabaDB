@@ -1,5 +1,8 @@
 import sqlite3 as sq
 
+#If set to True will print all sql commands and other goodies. Will also some checkings
+_DEBUG_MODE = False
+
 class RabaNameSpaceSingleton(type):
 	_instances = {}
 	
@@ -45,6 +48,7 @@ class RabaConnection(object) :
 		
 		cur = self.connection.cursor()
 		sql = "SELECT name FROM sqlite_master WHERE type='table'"
+		if _DEBUG_MODE : print sql
 		cur.execute(sql)
 		self.tables = set()
 		for n in cur :
@@ -52,12 +56,14 @@ class RabaConnection(object) :
 		
 		if not self.tableExits('rabalist_master') :
 			sql = "CREATE TABLE rabalist_master (id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_class NOT NULL, anchor_raba_id, relation_name NOT NULL, table_name NOT NULL, length DEFAULT 0, UNIQUE (table_name) ON CONFLICT REPLACE)"
+			if _DEBUG_MODE : print sql
 			self.connection.cursor().execute(sql)
 			self.connection.commit()
 			self.tables.add('rabalist_master')
 		
 		if not self.tableExits('raba_tables_constraints') :
 			sql = "CREATE TABLE raba_tables_constraints (table_name NOT NULL, constraints, PRIMARY KEY(table_name))"
+			if _DEBUG_MODE : print sql
 			self.connection.cursor().execute(sql)
 			self.connection.commit()
 			self.tables.add('raba_tables_constraints')
@@ -90,7 +96,7 @@ class RabaConnection(object) :
 			return True
 		return False
 	
-	def canISave(self, obj) :
+	def registerSave(self, obj) :
 		"""Each object can only be save donce during a session, returns False if the object has already been saved. True otherwise"""
 		if obj._runtimeId in self.savedObject :
 			return False
@@ -115,6 +121,7 @@ class RabaConnection(object) :
 	def dropTable(self, name) :
 		if self.tableExits(name) :
 			sql = "DROP TABLE IF EXISTS %s" % name
+			if _DEBUG_MODE : print sql
 			self.connection.cursor().execute(sql)
 			#self.connection.commit()
 			self.tables.remove(name)
@@ -122,7 +129,7 @@ class RabaConnection(object) :
 	def createTable(self, tableName, strFields) :
 		if not self.tableExits(tableName) :
 			sql = 'CREATE TABLE %s ( %s)' % (tableName, strFields)
-			print sql
+			if _DEBUG_MODE : print sql
 			self.connection.cursor().execute(sql)
 			#self.connection.commit()
 			self.tables.add(tableName)
@@ -140,7 +147,7 @@ class RabaConnection(object) :
 		cur = self.connection.cursor()
 		if len(definedValues) > 0 :
 			sql = 'SELECT * FROM %s WHERE %s' % (className, strWhere)
-			#print sql, definedValues
+			if _DEBUG_MODE : print sql, definedValues
 			cur.execute(sql, definedValues)
 		return cur
 	
@@ -150,6 +157,7 @@ class RabaConnection(object) :
 		self.createTable(table_name, 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_raba_id, value, type, obj_raba_class_name, obj_raba_id, obj_raba_namespace')
 		
 		sql = 'INSERT INTO rabalist_master (anchor_class, anchor_raba_id, relation_name, table_name, length) VALUES (?, ?, ?, ?, ?)'
+		if _DEBUG_MODE : print sql
 		cur = self.connection.cursor()
 		cur.execute(sql, (anchor_class_name, anchor_raba_id, relation_name, table_name, 0))
 		raba_id = cur.lastrowid
@@ -160,6 +168,7 @@ class RabaConnection(object) :
 		table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
 		
 		sql = 'DELETE FROM rabalist_master WHERE table_name = ? and anchor_raba_id = ?'
+		if _DEBUG_MODE : print sql, (table_name, anchor_raba_id)
 		cur = self.connection.cursor()
 		cur.execute(sql, (table_name, anchor_raba_id))
 		
@@ -168,6 +177,7 @@ class RabaConnection(object) :
 		self.dropTable(table_name)
 		
 		sql = 'DELETE FROM rabalist_master WHERE table_name = ?' 
+		if _DEBUG_MODE : print sql, (table_name, )
 		cur = self.connection.cursor()
 		cur.execute(sql, (table_name, ))
 		#self.connection.commit()
@@ -177,37 +187,38 @@ class RabaConnection(object) :
 		
 	def updateRabaListLength(self, raba_id, newLength) :
 		sql = "UPDATE rabalist_master SET length = ? WHERE id = ?"
+		if _DEBUG_MODE : print sql, (newLength, raba_id)
 		self.connection.cursor().execute(sql, (newLength, raba_id))
 		#self.connection.commit()
 
 	def getRabaListInfos(self, **fields) :
-		try :
+		
+		if 'raba_id' in fields :
 			sql = 'SELECT * FROM rabalist_master WHERE id = ?'
+			if _DEBUG_MODE : print sql
 			cur = self.connection.cursor()
 			cur.execute(sql, (fields['raba_id'], ))
-		except KeyError :
-			try :
-				sql = 'SELECT * FROM rabalist_master WHERE table_name = ? and anchor_raba_id = ?'
-				cur = self.connection.cursor()
-				cur.execute(sql, (self.makeRabaListTableName(fields['anchor_class_name'], fields['relation_name']), fields['anchor_raba_id']))
-			except KeyError :
-				return None
-			
+		elif 'anchor_class_name' in fields and 'relation_name' in fields and 'anchor_raba_id' in fields :
+			sql = 'SELECT * FROM rabalist_master WHERE table_name = ? and anchor_raba_id = ?'
+			if _DEBUG_MODE : print sql, (self.makeRabaListTableName(fields['anchor_class_name'], fields['relation_name']), fields['anchor_raba_id'])
+			cur = self.connection.cursor()
+			cur.execute(sql, (self.makeRabaListTableName(fields['anchor_class_name'], fields['relation_name']), fields['anchor_raba_id']))
+		else :
+			return None
+		print "-------56>>>>>", sql, fields
 		res = cur.fetchone()
-		#print '-----', res, (sql, (self.makeRabaListTableName(fields['anchor_class_name'], fields['relation_name']), fields['anchor_raba_id']))
 		if res == None :
 			return None
 		
 		res2 = cur.fetchone()
 		if res2 != None :
-			print res
-			print res2
 			raise ValueError("The parameters %s are valid for more than one element" % fields)
 		
 		return {'raba_id' : res[0], 'anchor_class' : str(res[1]), 'anchor_raba_id' : str(res[2]), 'relation_name' : str(res[3]), 'table_name' : str(res[4]), 'length' : int(res[5])}
 	
 	def getRabaListTables(self) :
 		sql = 'SELECT * FROM rabalist_master'
+		if _DEBUG_MODE : print sql
 		cur = self.connection.cursor()
 		cur.execute(sql)
 		

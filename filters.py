@@ -1,8 +1,12 @@
 import re, types
 
-from setup import *
+from setup import RabaConnection, RabaConfiguration, _DEBUG_MODE
 from Raba import *
 import fields as RabaFields
+
+#####
+# Add arthmetic operations {'chro.x2 - chro.x1 >' : 10}
+#####
 
 #Usage:
 #########
@@ -34,23 +38,37 @@ import fields as RabaFields
 
 class RabaQuery :
 
-	def __init__(self, rabaClass) :
-		self.reset(rabaClass)
+	def __init__(self, rabaClass, namespace = None) :
+		"see reset"
+		self.reset(rabaClass, namespace)
 	
-	def reset(self, rabaClass) :
-		assert isRabaClass(rabaClass)
+	def reset(self, rabaClass, namespace = None) :
+		"""rabaClass can either be raba class of a string of a raba class name. In the latter case you must provide the namespace argument.
+		If it's a Raba Class the argument is ignored. If you fear cicular importants use strings"""
 		
-		self.rabaClass = rabaClass
+		if type(rabaClass) is types.StringType :
+			self._raba_namespace = namespace
+			self.con = RabaConnection(self._raba_namespace)
+		else :
+			if _DEBUG_MODE :
+				if not isRabaClass(rabaClass) :
+					raise ValueError('%s does not inherit from Raba' % rabaClass)
+			self.rabaClass = rabaClass
+			self._raba_namespace = self.rabaClass._raba_namespace
+
+		self.con = RabaConnection(self._raba_namespace)
 		self.filters = []
 		self.tables = set()
-		
-		self._raba_namespace = self.rabaClass._raba_namespace
-		self.con = RabaConnection(self._raba_namespace)
 		
 		#self.fctPattern = re.compile("\s*([^\s]+)\s*\(\s*([^\s]+)\s*\)\s*([=><])\s*([^\s]+)\s*")
 		self.fieldPattern = re.compile("\s*([^\s\(\)]+)\s*([=><]|([L|l][I|i][K|k][E|e]))\s*(.+)")
 		self.operators = set(['LIKE', '=', '<', '>', 'IS'])
-
+		self.artOperators = set(['+', '-', '*', '/', '<', '>', '%', '=', '>=', '<=', '<>', '!='])
+	
+	def _parseArtOperators(self, k) :
+		#TODO
+		pass
+	
 	def addFilter(self, *lstFilters, **dctFilters) :
 		"add a new filter to the query"
 		
@@ -63,6 +81,7 @@ class RabaQuery :
 		if len(dctFilters) > 0 :
 			dstF = dict(dstF, **dctFilters)
 		
+		filts = {}
 		for k, v in dstF.iteritems() :
 			sk = k.split(' ')
 			if len(sk) == 2 :
@@ -76,16 +95,17 @@ class RabaQuery :
 			else :
 				raise ValueError('Invalid field %s' % k)
 			
-			if isRabaObject(v) :
+			if isRabaObject(v) or isRabaObjectPupa(v):
 				vv = v.getJsonEncoding()
 			else :
 				vv = v
 				
 			if sk[0].find('->') > -1 :
-				self._parseJoint(sk[0], operator, vv)
+				joink, joinv = self._parseJoint(sk[0], operator, vv)
+				filts[joink] = joinv
 			else :
-				self.filters.append({kk : vv})
-
+				filts[kk] = vv
+		
 		for lt in lstFilters :
 			for l in lt : 
 				match = self.fieldPattern.match(l)
@@ -97,10 +117,13 @@ class RabaQuery :
 				value = match.group(4)
 				
 				if field.find('->') > -1 :
-					self._parseJoint(field, operator, value)
+					joink, joinv = self._parseJoint(field, operator, value)
+					filts[joink] = joinv
 				else :
-					self.filters.append({'%s.%s %s' %(self.rabaClass.__name__, field, operator) : value})
-			
+					filts['%s.%s %s' %(self.rabaClass.__name__, field, operator)] = value
+		
+		self.filters.append(filts)
+		
 	def _parseJoint(self, strJoint, lastOperator, value) :
 		def testAttribute(currClass, field) :
 			attr = getattr(currClass, field)
@@ -136,7 +159,7 @@ class RabaQuery :
 			raise ValueError('Invalid query ending with %s' % field[-1])
 			
 		self.tables.add(attr.className)
-		self.filters.append({ '%s %s' % (' AND '.join(conditions), lastOperator) : value})
+		return '%s %s' % (' AND '.join(conditions), lastOperator), value
 	
 	def getSQLQuery(self) :
 		"Returns the query without performing it"
@@ -155,7 +178,6 @@ class RabaQuery :
 			tablesStr =  ', '.join(self.tables)
 		
 		sql = 'SELECT %s.raba_id from %s WHERE %s' % (self.rabaClass.__name__, tablesStr, sqlFilters)
-		#print sql, sqlValues
 		
 		return (sql, sqlValues)
 	
@@ -165,6 +187,7 @@ class RabaQuery :
 		
 		sql, sqlValues = self.getSQLQuery()
 		cur = self.con.cursor()
+		if _DEBUG_MODE : print sql, sqlValues
 		cur.execute(sql, sqlValues)
 		
 		for v in cur :
@@ -174,12 +197,13 @@ class RabaQuery :
 		"Runs the query and returns the entire result"
 		sql, sqlValues = self.getSQLQuery()
 		cur = self.con.cursor()
+		if _DEBUG_MODE : print sql, sqlValues
 		cur.execute(sql, sqlValues)
 		
 		res = []
 		for v in cur :
 			res.append(RabaPupa(self.rabaClass, v[0]))
-		
+
 		return res
 
 if __name__ == '__main__' :
