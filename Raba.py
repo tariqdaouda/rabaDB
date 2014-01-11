@@ -65,42 +65,50 @@ class _RabaPupaSingleton_Metaclass(type):
 
 class RabaListPupaSingleton_Metaclass(abc.ABCMeta):
 	_instances = {}
-
+	
 	def __call__(clsObj, *args, **kwargs):
 		
 		anchorObj = kwargs['anchorObj']
 		relationName = kwargs['relationName']
 		
+		key = (anchorObj._rabaClass.__name__, anchorObj.raba_id, relationName)
+		
+		if key in RabaListSingleton_Metaclass._instances :
+			return RabaListSingleton_Metaclass._instances[key]
+		if key in clsObj._instances :
+			return clsObj._instances[key]
+		
 		connection = RabaConnection(anchorObj._raba_namespace)
-		#print "----------lasfhgkljsdfhg", anchorObj.raba_id
-		#stop
+		
 		infos = connection.getRabaListInfos(anchor_class_name = anchorObj._rabaClass.__name__, anchor_raba_id = anchorObj.raba_id, relation_name = relationName)
-		
-		if infos != None :
-			key = infos['raba_id']
-		
-			if key in RabaListSingleton_Metaclass._instances :
-				return RabaListSingleton_Metaclass._instances[key]
-			elif key in clsObj._instances :
-				return clsObj._instances[key]
-			
+		if infos != None :			
 			for k in kwargs :
 				infos[k] = kwargs[k]
-			
 			obj = super(RabaListPupaSingleton_Metaclass, clsObj).__call__(*args, **infos)
-			clsObj._instances[key] = obj
-			
-			
-			return obj
-		return super(RabaListPupaSingleton_Metaclass, clsObj).__call__(*args, **kwargs)
+			obj.raba_id = infos['raba_id']
+			obj.tableName = infos['table_name']
+			obj.length = infos['length']
+			obj.anchorObj = anchorObj
+			obj.relationName = relationName
+			obj._raba_namespace = anchorObj._raba_namespace
+			obj.connection = connection
+		else :
+			obj = super(RabaListPupaSingleton_Metaclass, clsObj).__call__(*args, **kwargs)
+		
+		clsObj._instances[key] = obj
+		#print clsObj._instances.keys()
+		return obj
 		
 class RabaListSingleton_Metaclass(abc.ABCMeta):
 	_instances = {}
 
 	def __call__(clsObj, *args, **kwargs):
 		
-		if 'raba_id' in kwargs :
-			key = kwargs['raba_id']
+		if 'anchorObj' in kwargs and 'relationName' in kwargs :
+			anchorObj = kwargs['anchorObj']
+			relationName = kwargs['relationName']
+			
+			key = (anchorObj._rabaClass.__name__, anchorObj.raba_id, relationName)
 		
 			if key in clsObj._instances :
 				return clsObj._instances[key]
@@ -329,8 +337,9 @@ class Raba(object):
 				raise ValueError("Unable to set field %s to %s in Raba object %s" %(k, dbLine[i], self._rabaClass.__name__))
 		
 		for k in lists :
+			#print '----iop'
 			rlp = RabaListPupa(anchorObj = self, relationName = k)
-			print "----36>>>>", self.raba_id, k, rlp.tableName
+			#print "----36>>>>", self.raba_id, k, rlp
 			self.__setattr__(k, rlp)
 	
 	def _raba__init__(self, **fieldsSet) :
@@ -476,7 +485,6 @@ class Raba(object):
 					except :
 						raise ValueError("Unable to set '%s' to value '%s'. Value is not a valid RabaList" % (k, vv))
 				
-				
 				currList = getattr(self, k)
 				if vv is not currList and len(currList) > 0 :
 					currList.erase()
@@ -522,45 +530,31 @@ class RabaListPupa(MutableSequence) :
 	__metaclass__ = RabaListPupaSingleton_Metaclass
 
 	def __init__(self, **kwargs) :
-		pass
-	
-	def __init__bck(self, **kwargs) :
 		self.anchorObj = kwargs['anchorObj']
 		self.relationName = kwargs['relationName']
 		self._raba_namespace = self.anchorObj._raba_namespace
-		connection = RabaConnection(self._raba_namespace)
-		
-		try :
-			self.raba_id = kwargs['raba_id']
-			self.length = kwargs['length']
-			self.tableName = kwargs['tableName']
-		except KeyError :
-			infos = connection.getRabaListInfos(relation_name = self.relationName, anchor_class_name = self.anchorObj.__class__.__name__, anchor_raba_id = self.anchorObj.raba_id)
-			if infos != None :
-				self.raba_id = infos['raba_id']
-				self.tableName = infos['table_name']
-				self.length = infos['length']
-			else :
-				self.raba_id, self.tableName = None, None 
-				self.length = 0
-			print "piouui---", self.anchorObj.raba_id, self.anchorObj, infos, self.relationName, self.anchorObj.__class__.__name__, self.tableName
-		#print self.anchorObj
-		
+		connection = RabaConnection(self._raba_namespace)	
+		self.tableName = connection.makeRabaListTableName(self.anchorObj._rabaClass.__name__, self.relationName)
+		self.raba_id = None
+		self.length = 0
+
 	def develop(self) :
 		MutableSequence.__setattr__(self, '__class__', RabaList)
 		
-		relName = MutableSequence.__getattribute__(self, 'relationName')
-		anchorObj = MutableSequence.__getattribute__(self, 'anchorObj')
-		namespace = MutableSequence.__getattribute__(self, '_raba_namespace')
-		tableName = MutableSequence.__getattribute__(self, 'tableName')
-		raba_id = MutableSequence.__getattribute__(self, 'raba_id')
+		initFromPupa = {}
+		
+		initFromPupa['relationName'] = MutableSequence.__getattribute__(self, 'relationName')
+		initFromPupa['anchorObj'] = anchorObj = MutableSequence.__getattribute__(self, 'anchorObj')
+		initFromPupa['_raba_namespace'] = namespace = MutableSequence.__getattribute__(self, '_raba_namespace')
+		initFromPupa['tableName'] = tableName = MutableSequence.__getattribute__(self, 'tableName')
+		initFromPupa['raba_id'] = raba_id = MutableSequence.__getattribute__(self, 'raba_id')
 		
 		purge = MutableSequence.__getattribute__(self, '__dict__').keys()
 		for k in purge :
 			delattr(self, k)
 		
-		RabaList.__init__(self, raba_id = raba_id, namespace = namespace, anchorObj = anchorObj, relationName = relName, tableName = tableName)
-		RabaList._attachToObject(self, anchorObj, relName)
+		RabaList.__init__(self, initFromPupa = initFromPupa)
+		RabaList._attachToObject(self, anchorObj, initFromPupa['relationName'])
 		
 	def __getitem__(self, i) :
 		self.develop()
@@ -643,32 +637,26 @@ class RabaList(MutableSequence) :
 		self._raba_namespace = None
 		self.connection = None
 		self.rabaConfiguration = None
+		self.connection
 		
 		if len(listElements) > 0 :
 			self.data = list(listElements[0])
 		else :
 			self.data = []
 		
-		if 'anchorObj' in listArguments and listArguments['anchorObj'] != None :
-			self.anchorObj = listArguments['anchorObj']
-		
-		if 'namespace' in listArguments and listArguments['namespace'] != None :
-			self._setNamespaceConAndConf(listArguments['namespace'])
-		
-		if 'relationName' in listArguments and listArguments['relationName'] != None :
-			self.relationName = listArguments['relationName']
+		if 'initFromPupa' in listArguments :
+			pupaInit = listArguments['initFromPupa']
+			self.anchorObj = pupaInit['anchorObj']
+			self.relationName = pupaInit['relationName']
+			self._raba_namespace = self.anchorObj._raba_namespace
+			self.raba_id = pupaInit['raba_id']
+			self.tableName = pupaInit['tableName']
 			
-		if 'raba_id' in listArguments and listArguments['raba_id'] != None :
-			if self.connection == None :
-				raise ValueError('Unable to set list, i have an id but no namespace')
-			
-			infos = self.connection.getRabaListInfos(raba_id = listArguments['raba_id'])
-			self.raba_id = infos['raba_id']
-			self.relationName = infos['relation_name']
-			self.tableName = infos['table_name']
-			
+			self._setNamespaceConAndConf(self.anchorObj._raba_namespace)
 			cur = self.connection.cursor()
-			cur.execute('SELECT * FROM %s WHERE anchor_raba_id = ?' % self.tableName, (self.anchorObj.raba_id, ))
+			sql, values = 'SELECT * FROM %s WHERE anchor_raba_id = ?' % self.tableName, (self.anchorObj.raba_id, )
+			if _DEBUG_MODE : print sql, values
+			cur.execute(sql, values)
 			for aidi in cur :
 				value = aidi[2]
 				typ = aidi[3]
@@ -680,13 +668,11 @@ class RabaList(MutableSequence) :
 				elif typ == RabaFields.RABA_FIELD_TYPE_IS_RABA_LIST :
 					raise FutureWarning('RabaList in RabaList not supported')
 				elif typ == RabaFields.RABA_FIELD_TYPE_IS_RABA_OBJECT :
-					#print value
-					#val = json.loads(value)
 					classObj = RabaConnection(raba_namespace).getClass(className)
 					self.append(RabaPupa(classObj, raba_id))
 				else :
 					raise ValueError("Unknown type: %s in rabalist %s" % (typ, self))
-		
+	
 		self._runtimeId = (self.__class__.__name__, random.random())#this is used only during runtime ex, to avoid circular calls
 	
 	def pupatizeElements(self) :

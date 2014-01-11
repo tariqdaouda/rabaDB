@@ -205,7 +205,7 @@ class RabaConnection(object) :
 			cur.execute(sql, (self.makeRabaListTableName(fields['anchor_class_name'], fields['relation_name']), fields['anchor_raba_id']))
 		else :
 			return None
-		print "-------56>>>>>", sql, fields
+		#print "-------56>>>>>", sql, fields
 		res = cur.fetchone()
 		if res == None :
 			return None
