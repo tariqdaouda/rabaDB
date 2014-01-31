@@ -95,7 +95,7 @@ class RabaQuery :
 			else :
 				raise ValueError('Invalid field %s' % k)
 			
-			if isRabaObject(v) or isRabaObjectPupa(v):
+			if isRabaObject(v) :
 				vv = v.getJsonEncoding()
 			else :
 				vv = v
@@ -154,7 +154,10 @@ class RabaQuery :
 		if len(lastField) == 2 :
 			conditions.append('%s.%s' %(attr.className, lastField[-1]))
 		elif len(lastField) == 1 :
-			conditions.append('%s' %(attr.className))
+			if RabaFields.fieldIsRabaObjectt(attr) :
+				conditions.append('%s.json' %(attr.className))
+			else :
+				conditions.append('%s' %(attr.className))
 		else :
 			raise ValueError('Invalid query ending with %s' % field[-1])
 			

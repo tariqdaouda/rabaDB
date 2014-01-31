@@ -40,7 +40,7 @@ class Relation(RList) :
 		RList.__init__(self, ElmtConstrainFct, **ElmtConstrainFctWArgs)
 	
 	def check(self, val) :
-		return (Raba.isRabaObject(val) or Raba.isRabaObjectPupa(val)) and ((self.className != None and val._rabaClass.__name__ == self.className) or self.className == None) and RList.check(self, val)
+		return Raba.isRabaObject(val) and ((self.className != None and val._rabaClass.__name__ == self.className) or self.className == None) and RList.check(self, val)
 
 class Primitive(RabaField) :
 	_raba_type = RABA_FIELD_TYPE_IS_PRIMITIVE
@@ -76,7 +76,7 @@ class RabaObject(RabaField) :
 	def check(self, val) :
 		if val == self.default and self.default == None :
 			return True
-		retVal =  (Raba.isRabaObject(val) or Raba.isRabaObjectPupa(val)) and ((self.className != None and val._rabaClass.__name__ == self.className) or self.className == None) and RabaField.check(self, val)
+		retVal =  Raba.isRabaObject(val) and ((self.className != None and val._rabaClass.__name__ == self.className) or self.className == None) and RabaField.check(self, val)
 		
 		if self.classNamespace == None :
 			return retVal
