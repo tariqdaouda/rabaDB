@@ -2,7 +2,7 @@ import sqlite3 as sq
 import os, copy, types, cPickle, random, json, abc, sys#, weakref
 from collections import MutableSequence
 
-from setup import RabaConnection, RabaConfiguration, _DEBUG_MODE
+from setup import RabaConnection, RabaConfiguration
 import fields as RabaFields
 
 def makeRabaObjectSingletonKey(clsName, namespace, raba_id) :
@@ -22,7 +22,7 @@ def isRabaClass(v) :
 	return _recClassCheck(v, Raba)
 
 def isRabaList(v) :
-	return _recClassCheck(v.__class__, RabaList)
+	return _recClassCheck(v.__class__, RabaList) or isRabaListPupa(v)
 
 def isRabaListPupa(v) :
 	return _recClassCheck(v.__class__, RabaListPupa)
@@ -121,15 +121,17 @@ class _RabaSingleton_MetaClass(type) :
 	def __new__(cls, name, bases, dct) :
 		if name != 'Raba' :
 			fields = []
-			columns = {}
+			columns = {'raba_id' : 0, 'json' : 1}
 			columnsToLowerCase = {'raba_id' : 'raba_id', 'json' : 'json'}
 
+			i = len(columns)
 			for k, v in dct.items():
 				sk = str(k)
 				if RabaFields.isField(v) :
 					fields.append(sk)
-					columns[sk.lower()] = -1
+					columns[sk.lower()] = i
 					columnsToLowerCase[sk.lower()] = sk
+					i += 1
 			try :
 				con = RabaConnection(dct['_raba_namespace'])
 			except KeyError :
@@ -143,7 +145,7 @@ class _RabaSingleton_MetaClass(type) :
 			uniqueStr = uniqueStr[:-2]
 
 			if not con.tableExits(name) :
-				idJsonStr = 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT, json '
+				idJsonStr = 'raba_id INTEGER PRIMARY KEY, json '
 				if len(fields) > 0 :
 					if len(uniqueStr) > 0 :
 						con.createTable(name, '%s, %s, %s' % (idJsonStr, ', '.join(list(fields)), uniqueStr))
@@ -175,8 +177,8 @@ class _RabaSingleton_MetaClass(type) :
 						#Destroy field that have mysteriously desapeared
 						fieldsToKill.append('%s = NULL' % c[1])
 						con.dropRabalist(name, c[1])
-					else :
-						columns[c[1]] = c[0]
+					#else :
+					#	columns[c[1]] = c[0]
 
 					tableColumns.add(c[1].lower())
 
@@ -188,10 +190,9 @@ class _RabaSingleton_MetaClass(type) :
 				for k in columns :
 					if k.lower() not in tableColumns :
 						cur.execute('ALTER TABLE %s ADD COLUMN %s' % (name, k))
-				#con.commit()
 
-			columns['raba_id'] = 0
-			columns['json'] = 1
+			#columns['raba_id'] = 0
+			#columns['json'] = 1
 			dct['raba_id'] = RabaFields.Primitive()
 			dct['json'] = RabaFields.Primitive()
 			dct['columns'] = columns
@@ -281,7 +282,6 @@ class RabaPupa(object) :
 		uniqueId = getAttr('raba_id')
 		connection = RabaConnection(getAttr('_raba_namespace'))
 		dbLine = connection.getRabaObjectInfos(getAttr('_rabaClass').__name__, {'raba_id' : uniqueId}).fetchone()
-		#print '\t88900', (getAttr('_rabaClass').__name__, {'raba_id' : uniqueId})
 		setAttr('__class__', rabaClass)
 		purge = getAttr('__dict__').keys()
 		for k in purge :
@@ -291,7 +291,14 @@ class RabaPupa(object) :
 		self.connection = connection
 		rabaClass._raba__init__(self, initDbLine = dbLine)
 		rabaClass.__init__(self)
-		#print '7890', self
+
+	def getDctDescription(self) :
+		"returns a dict describing the object"
+		return  {'type' : RabaFields.RABA_FIELD_TYPE_IS_RABA_OBJECT, 'className' : self._rabaClass.__name__, 'raba_id' : self.raba_id, 'raba_namespace' : self._raba_namespace}
+
+	def getJsonEncoding(self) :
+		"returns a json encoding of self.getDctDescription()"
+		return json.dumps(self.getDctDescription())
 
 	def __getattr__(self, name) :
 		develop = object.__getattribute__(self, "develop")
@@ -321,18 +328,18 @@ class Raba(object):
 		for kk, i in self.columns.items() :
 			k = self.columnsToLowerCase[kk.lower()]
 			elmt = getattr(self._rabaClass, k)
-			if RabaFields.fieldIsPrimitive(elmt) :
+			if RabaFields.isPrimitiveField(elmt) :
 				try :
 					self.__setattr__(k, cPickle.loads(str(dbLine[i])))
 				except :
 					self.__setattr__(k, dbLine[i])
 
-			elif RabaFields.fieldIsRabaObjectt(elmt) :
+			elif RabaFields.isRabaObjectField(elmt) :
 				if dbLine[i] != None :
 					val = json.loads(dbLine[i])
 					objClass = RabaConnection(val["raba_namespace"]).getClass(val["className"])
 					self.__setattr__(k, RabaPupa(objClass, val["raba_id"]))
-			elif RabaFields.fieldIsRabaList(elmt) :
+			elif RabaFields.isRabaListField(elmt) :
 				lists.append(k)
 			else :
 				raise ValueError("Unable to set field %s to %s in Raba object %s" %(k, dbLine[i], self._rabaClass.__name__))
@@ -342,24 +349,27 @@ class Raba(object):
 			self.__setattr__(k, rlp)
 
 	def _raba__init__(self, **fieldsSet) :
+		self.sqlSave = {}
+		self.sqlSaveQMarks = {}
+		self.listsToSave = {}
+
 		if self.__class__ is Raba :
 			raise TypeError('Raba class should never be instanciated, use inheritance')
 
-		self._runtimeId = (self.__class__.__name__, random.random()) #this is using only during runtime ex, to avoid circular calls
+		self._runtimeId = (self.__class__.__name__, random.random()) #this is used only during runtime ex, to avoid circular calls
 		self._rabaClass = self.__class__
 
 		self.connection = RabaConnection(self._rabaClass._raba_namespace)
 		self.rabaConfiguration =  RabaConfiguration(self._rabaClass._raba_namespace)
 
+		self._saved = False #True if present in the database
+
 		if 'initDbLine' in fieldsSet and 'initDbLine' != None :
 			self._initDbLine(fieldsSet['initDbLine'])
+			self._saved = True
 
-		self.mutated = True #True if needs to be saved
-
-	def setForceSave(self) :
-		"Raba is lazy, be default it doesn't save object who haven't been modified. This Forces the object saving regardless of it's current mutation status"
-		self.mutated = True
-		self.save()
+		if self.raba_id == None :
+			self.raba_id = self.connection.getRabaId(self)
 
 	def autoclean(self) :
 		"""TODO: Copies the table into a new one droping all the collumns that have all their values to NULL
@@ -371,84 +381,60 @@ class Raba(object):
 		return RabaPupa(self.__class__, self.raba_id)
 
 	def develop(self) :
-		"Dummy fct, so when you call develop on a fulf developed object you don't get nasty exceptions"
+		"Dummy fct, so when you call develop on a full developed object you don't get nasty exceptions"
 		pass
 
-	def _emptySave(self) :
-		"creates a new empty identity for the object while the old one remains saved in the database"
-		sql = 'SELECT MAX(raba_id) from %s LIMIT 1' % (self._rabaClass.__name__)
-		cur = self.connection.execute(sql)
-		res = cur.fetchone()
-		try :
-			self.raba_id = int(res[0])+1
-		except TypeError:
-			self.raba_id = 0
-		
-		sql = 'INSERT INTO %s (raba_id, json) VALUES (?, ?)' % (self._rabaClass.__name__)
-		self.connection.execute(sql, (self.raba_id, self.getJsonEncoding()))
-		
-		#sql = 'INSERT INTO %s (json) VALUES (NULL)' % (self._rabaClass.__name__)
-		#cur = self.connection.execute(sql)
-		#self.raba_id = cur.lastrowid
-		#key = makeRabaObjectSingletonKey(self._rabaClass.__name__, self._raba_namespace, self.raba_id)
-		#_RabaSingleton_MetaClass._instances[key] = self
-		#sql = 'UPDATE %s SET json = ? WHERE raba_id=?' % self.__class__.__name__
-		#self.connection.execute(sql, (self.getJsonEncoding(), self.raba_id))
+	@classmethod
+	def addIndex(cls, field) :
+		con = RabaConnection(cls._raba_namespace)
+		if RabaFields.isRabaListField(object.__getattribute__(cls, field)) :
+			name = con.makeRabaListTableName(cls.__name__, field)
+			ffield = 'anchor_raba_id'
+		else :
+			name = cls.__name__
+			ffield = field
+
+		con.createIndex(name, ffield)
+
+	@classmethod
+	def removeIndex(cls, field) :
+		con = RabaConnection(cls._raba_namespace)
+		if RabaFields.isRabaListField(object.__getattribute__(cls, field)) :
+			name = con.makeRabaListTableName(cls.__name__, field)
+			ffield = 'anchor_raba_id'
+		else :
+			name = cls.__name__
+			ffield = field
+
+		con.dropIndex(name, ffield)
+
+	def mutated(self) :
+		'returns True if the object has changed since the last save'
+		return len(self.sqlSave) > 0
 
 	def save(self) :
-		self.connection.initateSave(self)
+		if self.mutated() :
+			for k, v in self.listsToSave.iteritems() :
+				v._save()
+				self.sqlSave[k] = len(v)
+				if not self._saved : #this dict is only for optimisation purpose for generating the insert sql
+					self.sqlSaveQMarks[k] = '?'
 
-		if self.mutated and self.connection.registerSave(self) :
-			if self.raba_id == None :
-				self._emptySave()
+			self.sqlSave['json'] = self.getJsonEncoding()
+			if not self._saved : #this dict is only for optimisation purpose for generating the insert sql
+				self.sqlSaveQMarks['json'] = '?'
 
-			fields = []
-			values = []
-			rabalists = []
-			listsToSave = []
-			for k, valType in self.__class__.__dict__.items() :
-				if RabaFields.isField(valType) and k != 'raba_id':
-					val = getattr(self, k)
-					if not RabaFields.fieldIsRabaList(valType) and val is valType and self.mutated :
-						values.append(valType.default)
-						fields.append(k)
-					elif RabaFields.fieldIsPrimitive(valType) and self.mutated :
-						if isPythonPrimitive(val):
-							values.append(val)
-						else :
-							values.append(buffer(cPickle.dumps(val)))
-						fields.append(k)
-
-					elif RabaFields.fieldIsRabaObjectt(valType) :
-						if val != None :
-							val.save()
-							values.append(val.getJsonEncoding())
-							fields.append(k)
-
-					elif RabaFields.fieldIsRabaList(valType) :
-						if isRabaList(val) or isRabaListPupa(val):
-							listsToSave.append(val)
-							values.append(len(val))
-							fields.append(k)
-
-			if len(values) > 0 :
-					#values.append(self.getJsonEncoding())
-					#fields.append('json')
-					values.append(self.raba_id)
-
-					sql = 'UPDATE %s SET %s = ? WHERE raba_id = ?' % (self.__class__.__name__, ' = ?, '.join(fields))
-					self.connection.execute(sql, values)
+			if not self._saved :
+				sql = 'INSERT INTO %s (%s) VALUES (%s)' % (self.__class__.__name__, ', '.join(self.sqlSave.keys()), ', '.join(self.sqlSaveQMarks.values()))
 			else :
-				return False
+				sql = 'UPDATE %s SET %s = ? WHERE raba_id = ?' % (self.__class__.__name__, ' = ?, '.join(self.sqlSave.keys()))
 
-			for l in listsToSave :
-				l._save()
+			self.connection.execute(sql, self.sqlSave.values())
 
-			self.mutated = False
-			self.connection.freeSave(self)
-			
-			return True
-		return False
+			self._saved = True
+			self.sqlSave = {}
+			self.sqlSaveQMarks = {}
+			self.listsToSave = {}
 
 	def delete(self) :
 		self.connection.deleteRabaObject(self)
@@ -474,10 +460,21 @@ class Raba(object):
 	def __setattr__(self, k, v) :
 		vv = v
 		if hasattr(self.__class__, k) and RabaFields.isField(getattr(self.__class__, k)) :
-			if not RabaFields.fieldIsRabaList(getattr(self.__class__, k)) :
+			vSQL = None
+			if not RabaFields.isRabaListField(getattr(self.__class__, k)) :
 				classType = getattr(self.__class__, k)
 				if not classType.check(vv) :
 					raise ValueError("Unable to set '%s' to value '%s'. Constrain function violation" % (k, vv))
+				if isRabaObject(vv) :
+					vSQL = vv.getJsonEncoding()
+				elif isPythonPrimitive(vv):
+					vSQL = vv
+				else :
+					vSQL = buffer(cPickle.dumps(vv))
+
+				self.sqlSave[k] = vSQL
+				if not self._saved : #this dict is only for optimisation purpose for generating the insert sql
+					self.sqlSaveQMarks[k] = '?'
 			else :
 				if not isRabaList(vv) and not isRabaListPupa(vv) :
 					try :
@@ -491,14 +488,14 @@ class Raba(object):
 					self.connection.unregisterRabalist(anchor_class_name = self.__class__.__name__, anchor_raba_id = self.raba_id, relation_name = k)
 
 				vv._attachToObject(self, k)
-			object.__setattr__(self, 'mutated', True)
+				self.listsToSave[k] = vv #self.sqlSave[k] and self.sqlSaveQMarks[k] are updated in self.save() for lists
 
 		object.__setattr__(self, k, vv)
 
 	def __getattribute__(self, k) :
 		try :
 			elmt = object.__getattribute__(self, k)
-			if RabaFields.fieldIsRabaList(elmt) : #if empty
+			if RabaFields.isRabaListField(elmt) : #if empty
 				elmt = RabaListPupa(anchorObj = self, relationName = k)
 				object.__setattr__(self, k, elmt)
 			elif RabaFields.isField(elmt) :
@@ -647,7 +644,8 @@ class RabaList(MutableSequence) :
 		self.connection = None
 		self.rabaConfiguration = None
 		self._saved = False
-		
+		self._mutated = True
+
 		if len(listElements) > 0 :
 			self.data = list(listElements[0])
 		else :
@@ -685,6 +683,10 @@ class RabaList(MutableSequence) :
 				else :
 					raise ValueError("Unknown type: %s in rabalist %s" % (typ, self))
 
+	def mutated(self) :
+		'returns True if the object has changed since the last save'
+		return self._mutated
+
 	def pupatizeElements(self) :
 		"""Transform all raba object into pupas"""
 		for i in range(len(self)) :
@@ -694,7 +696,7 @@ class RabaList(MutableSequence) :
 		if self.tableName != None and self.anchorObj != None :
 			sql = 'DELETE FROM %s WHERE anchor_raba_id = ?' % self.tableName
 			self.connection.execute(sql, (self.anchorObj.raba_id,))
-			
+
 	def _save(self) :
 		"""saves the RabaList into it's own table. This a private function that should be called directly
 		Before saving the entire list corresponding to the anchorObj is wiped out before being rewritten. The
@@ -727,9 +729,10 @@ class RabaList(MutableSequence) :
 						values.append((self.anchorObj.raba_id, buffer(cPickle.dumps(e)), RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE, None, None, None))
 
 				self.connection.executemany('INSERT INTO %s (anchor_raba_id, value, type, obj_raba_class_name, obj_raba_id, obj_raba_namespace) VALUES (?, ?, ?, ?, ?, ?)' % self.tableName, values)
-			
+
 				self.connection.updateRabaListLength(self.raba_id, len(self))
 				self._saved = True
+				self._mutated = False
 				return True
 		else :
 			return False
@@ -750,6 +753,10 @@ class RabaList(MutableSequence) :
 	def pupa(self) :
 		return RabaListPupa(self.namespace, self.anchorObj, self.relationName)
 
+	def _mutateNotifyAnchor(self) :
+		self._mutated = True
+		self.anchorObj.listsToSave[self.relationName] = self
+
 	def _setNamespaceConAndConf(self, namespace) :
 		self._raba_namespace = namespace
 		self.connection = RabaConnection(self._raba_namespace)
@@ -763,7 +770,7 @@ class RabaList(MutableSequence) :
 		self.data.extend(v)
 		if self._raba_namespace == None and namespace != None :
 			self._setNamespaceConAndConf(namespace)
-	
+
 	#@profile
 	def append(self, v) :
 		if not self._checkElmt(v) :
@@ -773,6 +780,7 @@ class RabaList(MutableSequence) :
 			self._setNamespaceConAndConf(v._raba_namespace)
 
 		self.data.append(v)
+		self._mutateNotifyAnchor()
 
 	def insert(self, k, v) :
 		if not self._checkElmt(v, self._raba_namespace) :
@@ -782,9 +790,11 @@ class RabaList(MutableSequence) :
 			self._setNamespaceConAndConf(v._raba_namespace)
 
 		self.data.insert(k, v)
+		self._mutateNotifyAnchor()
 
 	def set(self, lst) :
 		self.data = list(lst)
+		self._mutateNotifyAnchor()
 
 	def __setitem__(self, k, v) :
 		if not self._checkElmt(v, self._raba_namespace) :
@@ -794,12 +804,15 @@ class RabaList(MutableSequence) :
 			self._setNamespaceConAndConf(v._raba_namespace)
 
 		self.data[k] = v
+		self._mutateNotifyAnchor()
 
 	def __delitem__(self, i) :
 		del self.data[i]
+		self._mutateNotifyAnchor()
 
 	def __getitem__(self, i) :
 		return self.data[i]
+		self._mutateNotifyAnchor()
 
 	def __len__(self) :
 		return len(self.data)

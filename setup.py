@@ -44,7 +44,7 @@ class RabaConnection(object) :
 	__metaclass__ = RabaNameSpaceSingleton
 
 	def __init__(self, namespace) :
-		
+
 		self.connection = sq.connect(RabaConfiguration(namespace).dbFile)
 		self.namespace = namespace
 		#self.setReadOnly(readOnly)
@@ -52,17 +52,21 @@ class RabaConnection(object) :
 		self.saveIniator = None
 		self.savedObject = set()
 		self.inTransaction = False
-		
+
 		self.enableQueryPrint(False)
 		self.enableStats(False)
-		
+
 		cur = self.connection.cursor()
-		sql = "SELECT name FROM sqlite_master WHERE type='table'"
+		sql = "SELECT name, type FROM sqlite_master WHERE type='table' or type='index'"
 		cur = self.execute(sql)
 		self.tables = set()
+		self.indexes = set()
 		for n in cur :
-			self.tables.add(n[0])
-		
+			if n[1] == 'table' :
+				self.tables.add(n[0])
+			elif n[1] == 'index' :
+				self.indexes.add(n[0])
+
 		if not self.tableExits('rabalist_master') :
 			sql = "CREATE TABLE rabalist_master (id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_class NOT NULL, anchor_raba_id, relation_name NOT NULL, table_name NOT NULL, length DEFAULT 0, UNIQUE (table_name) ON CONFLICT REPLACE)"
 			self.execute(sql)
@@ -74,11 +78,31 @@ class RabaConnection(object) :
 			self.execute(sql)
 			self.connection.commit()
 			self.tables.add('raba_tables_constraints')
-	
+
+		self.currentIds = {} #class name -> current max id
+
+	def makeIndexTableName(self, table, field) :
+		return "raba_%s_index_on_%s" %(table, field)
+
+	def createIndex(self, table, field) :
+		"Creates indexes for Raba Class a fields resulting in significantly faster SELECTs but potentially slower UPADTES/INSERTS and a bigger DBs"
+		indexTable = self.makeIndexTableName(table, field)
+		if indexTable not in self.indexes :
+			sql = "CREATE INDEX %s on %s(%s)" %(indexTable, table, field)
+			self.execute(sql)
+			self.indexes.add(indexTable)
+
+	def dropIndex(self, table, field) :
+		"DROPs an index created by RabaDb see createIndexes()"
+		indexTable = self.makeIndexTableName(table, field)
+		sql = "DROP INDEX IF EXISTS %s" %(indexTable)
+		self.execute(sql)
+		self.indexes.remove(indexTable)
+
 	def eraseStats(self) :
 		self.queryLogs = {'INSERT' : [], 'SELECT' : [], 'UPDATE' : [], 'DELETE' : [], 'DROP' : [], 'PRAGMA' : [],'CREATE' : []}
 		self.queryCounts = {'INSERT' : 0, 'SELECT' : 0, 'UPDATE' : 0, 'DELETE' : 0, 'DROP' : 0, 'PRAGMA' : 0,'CREATE' : 0, 'TOTAL': 0}
-	
+
 	def enableStats(self, bol, logQueries = False) :
 		self._enableStats = bol
 		self._logQueries = logQueries
@@ -86,7 +110,7 @@ class RabaConnection(object) :
 			self._enableStats = True
 			self.eraseStats()
 			self.startTime = time.time()
-	
+
 	def _logQuery(self, sql, values) :
 		if self._enableStats :
 			if sql[0].upper() == 'I' :
@@ -110,7 +134,7 @@ class RabaConnection(object) :
 					self.queryCounts[k] = 0
 					if self._logQueries :
 						self.queryLogs[k] = []
-			
+
 			self.queryCounts[k] += 1
 			self.queryCounts['TOTAL'] += 1
 			if self._logQueries :
@@ -118,10 +142,10 @@ class RabaConnection(object) :
 				for v in values :
 					vals.append(repr(v))
 				self.queryLogs[k].append((sql, vals))
-			
+
 	def enableQueryPrint(self, printQueries) :
 		self._printQueries = printQueries
-	
+
 	def execute(self, sql, values = ()) :
 		"executes an sql command for you or appends it to the current transacations. returns a cursor"
 		sql = sql.strip()
@@ -137,12 +161,12 @@ class RabaConnection(object) :
 			t = time.time() - self.startTime
 			print "====Raba Connection %s stats====" % (self.namespace)
 			if t < 60 :
-				print "Been running for: %fsc" % t 
+				print "Been running for: %fsc" % t
 			elif t < 3600 :
-				print "Been running for: %fmin" % (t/60) 
+				print "Been running for: %fmin" % (t/60)
 			else :
 				print "Been running for: %fh" % (t/3600)
-				 
+
 			print 'Query counts: '
 			for k, v in self.queryCounts.iteritems() :
 				print '\t', k
@@ -154,7 +178,7 @@ class RabaConnection(object) :
 				print "\t\t ratio (run time (sc)):", v/t
 		else :
 			print "====Raba Connection %s stats====> you must enable stats first" % (self.namespace)
-		
+
 	def executeMany(self, sql, values = [()]) :
 		sql = sql.strip()
 		if _DEBUG_MODE : print sql, values
@@ -206,6 +230,17 @@ class RabaConnection(object) :
 	def registerRabaClass(self, cls) :
 		"""keep track all loaded raba classes"""
 		self.loadedRabaClasses[cls.__name__] = cls
+		sql = 'SELECT MAX(raba_id) from %s LIMIT 1' % (cls.__name__)
+		cur = self.execute(sql)
+		res = cur.fetchone()
+		try :
+			self.currentIds[cls.__name__] = int(res[0])+1
+		except TypeError:
+			self.currentIds[cls.__name__] = 0
+
+	def getRabaId(self, obj) :
+		self.currentIds[obj.__class__.__name__] += 1
+		return self.currentIds[obj.__class__.__name__]
 
 	def getClass(self, name) :
 		"""returns a loaded raba class given it's name"""
@@ -218,10 +253,9 @@ class RabaConnection(object) :
 		return name in self.tables
 
 	def dropTable(self, name) :
-		if self.tableExits(name) :
-			sql = "DROP TABLE IF EXISTS %s" % name
-			self.tables.remove(name)
-			return self.execute(sql)
+		sql = "DROP TABLE IF EXISTS %s" % name
+		self.tables.remove(name)
+		return self.execute(sql)
 
 	def createTable(self, tableName, strFields) :
 		if not self.tableExits(tableName) :
@@ -274,7 +308,6 @@ class RabaConnection(object) :
 		self.execute(sql, (newLength, raba_id))
 
 	def getRabaListInfos(self, **fields) :
-
 		if 'raba_id' in fields :
 			sql = 'SELECT * FROM rabalist_master WHERE id = ?'
 			cur = self.execute(sql, (fields['raba_id'], ))
