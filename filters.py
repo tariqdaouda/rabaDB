@@ -181,26 +181,43 @@ class RabaQuery :
 
 		return (sql, sqlValues)
 
-	def iterRun(self) :
-		"""Runs the query and returns an iterator. This much more efficient for large sets of data but
-		yyou get results one by one."""
+	def iterRun(self, sqlTail = '') :
+		"""Compile filters and run the query and returns an iterator. This much more efficient for large sets of data but
+		yyou get results one by one. You can use sqlTail to add things such as order by"""
 
 		sql, sqlValues = self.getSQLQuery()
-		cur = self.con.execute(sql, sqlValues)
+		cur = self.con.execute('%s %s'% (sql, sqlTail), sqlValues)
 
 		for v in cur :
 			yield RabaPupa(self.rabaClass, v[0])
 
-	def run(self) :
-		"Runs the query and returns the entire result"
+	def run(self, sqlTail = '') :
+		"Compile filters and run the query and returns the entire result. You can use sqlTail to add things such as order by"
 		sql, sqlValues = self.getSQLQuery()
-		cur = self.con.execute(sql, sqlValues)
+		cur = self.con.execute('%s %s'% (sql, sqlTail), sqlValues)
 
 		res = []
 		for v in cur :
 			res.append(RabaPupa(self.rabaClass, v[0]))
 
 		return res
+
+	def runSQL(self, sql) :
+		"Runs the query and returns the entire result"
+		cur = self.con.execute(sql)
+		res = []
+		for v in cur :
+			res.append(RabaPupa(self.rabaClass, v[0]))
+
+		return res
+
+	def iterRunSQL(self, sql) :
+		"Runs the query and returns an iterator"
+		cur = self.con.execute(sql)
+
+		for v in cur :
+			yield RabaPupa(self.rabaClass, v[0])
+
 
 if __name__ == '__main__' :
 	#import unittest

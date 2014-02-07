@@ -56,28 +56,26 @@ class RabaConnection(object) :
 		self.enableQueryPrint(False)
 		self.enableStats(False)
 
-		cur = self.connection.cursor()
-		sql = "SELECT name, type FROM sqlite_master WHERE type='table' or type='index'"
+		sql = "SELECT name, type FROM sqlite_master WHERE type='table'"
 		cur = self.execute(sql)
 		self.tables = set()
-		self.indexes = set()
+		#self.indexes = set()
 		for n in cur :
-			if n[1] == 'table' :
-				self.tables.add(n[0])
-			elif n[1] == 'index' :
-				self.indexes.add(n[0])
+			self.tables.add(n[0])
+		#	elif n[1] == 'index' :
+		#		self.indexes.add(n[0])
 
-		if not self.tableExits('rabalist_master') :
-			sql = "CREATE TABLE rabalist_master (id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_class NOT NULL, anchor_raba_id, relation_name NOT NULL, table_name NOT NULL, length DEFAULT 0, UNIQUE (table_name) ON CONFLICT REPLACE)"
-			self.execute(sql)
-			self.connection.commit()
-			self.tables.add('rabalist_master')
+		#if not self.tableExits('rabalist_master') :
+		#	sql = "CREATE TABLE rabalist_master (id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_class NOT NULL, anchor_raba_id, relation_name NOT NULL, table_name NOT NULL, length DEFAULT 0)"
+		#	self.execute(sql)
+		#	self.connection.commit()
+		#	self.tables.add('rabalist_master')
 
 		if not self.tableExits('raba_tables_constraints') :
 			sql = "CREATE TABLE raba_tables_constraints (table_name NOT NULL, constraints, PRIMARY KEY(table_name))"
 			self.execute(sql)
 			self.connection.commit()
-			self.tables.add('raba_tables_constraints')
+			#self.tables.add('raba_tables_constraints')
 
 		self.currentIds = {} #class name -> current max id
 
@@ -87,17 +85,21 @@ class RabaConnection(object) :
 	def createIndex(self, table, field) :
 		"Creates indexes for Raba Class a fields resulting in significantly faster SELECTs but potentially slower UPADTES/INSERTS and a bigger DBs"
 		indexTable = self.makeIndexTableName(table, field)
-		if indexTable not in self.indexes :
-			sql = "CREATE INDEX %s on %s(%s)" %(indexTable, table, field)
+		#if indexTable not in self.indexes :
+		sql = "CREATE INDEX %s on %s(%s)" %(indexTable, table, field)
+		try :
 			self.execute(sql)
-			self.indexes.add(indexTable)
+		except :
+			return False
+		return True
+		#self.indexes.add(indexTable)
 
 	def dropIndex(self, table, field) :
 		"DROPs an index created by RabaDb see createIndexes()"
 		indexTable = self.makeIndexTableName(table, field)
 		sql = "DROP INDEX IF EXISTS %s" %(indexTable)
 		self.execute(sql)
-		self.indexes.remove(indexTable)
+		#self.indexes.remove(indexTable)
 
 	def eraseStats(self) :
 		self.queryLogs = {'INSERT' : [], 'SELECT' : [], 'UPDATE' : [], 'DELETE' : [], 'DROP' : [], 'PRAGMA' : [],'CREATE' : []}
@@ -221,26 +223,31 @@ class RabaConnection(object) :
 		self.savedObject.add(obj._runtimeId)
 		return True
 
-	def deleteRabaObject(self, obj) :
-		if obj.raba_id != None :
-			sql = 'DELETE FROM %s WHERE raba_id = ?' % obj._rabaClass.__name__
-			return self.execute(sql, (obj.raba_id, ))
-		return False
+	def delete(self, table, where, values = ()) :
+		"""where is a string of condictions without the sql 'WHERE'. ex: deleteRabaObject('Gene', where = raba_id = ?, values = (33,))"""
+		sql = 'DELETE FROM %s WHERE %s' % (table, where)
+		return self.execute(sql, values)
 
-	def registerRabaClass(self, cls) :
+	def getLastRabaId(self, cls) :
 		"""keep track all loaded raba classes"""
 		self.loadedRabaClasses[cls.__name__] = cls
 		sql = 'SELECT MAX(raba_id) from %s LIMIT 1' % (cls.__name__)
 		cur = self.execute(sql)
 		res = cur.fetchone()
 		try :
-			self.currentIds[cls.__name__] = int(res[0])+1
+			return int(res[0])+1
 		except TypeError:
-			self.currentIds[cls.__name__] = 0
+			return  0
 
-	def getRabaId(self, obj) :
+	def getNextRabaId(self, obj) :
+		if obj.__class__.__name__ not in self.currentIds :
+			self.currentIds[obj.__class__.__name__] = self.getLastRabaId(obj.__class__)
+
 		self.currentIds[obj.__class__.__name__] += 1
 		return self.currentIds[obj.__class__.__name__]
+
+	def registerRabaClass(self, cls) :
+		self.loadedRabaClasses[cls.__name__] = cls
 
 	def getClass(self, name) :
 		"""returns a loaded raba class given it's name"""
@@ -254,14 +261,38 @@ class RabaConnection(object) :
 
 	def dropTable(self, name) :
 		sql = "DROP TABLE IF EXISTS %s" % name
-		self.tables.remove(name)
+		try :
+			self.tables.remove(name)
+		except KeyError :
+			return None
+
 		return self.execute(sql)
 
 	def createTable(self, tableName, strFields) :
+		'creates a table and resturns the ursor, if the table already exists returns None'
 		if not self.tableExits(tableName) :
 			sql = 'CREATE TABLE %s ( %s)' % (tableName, strFields)
+			self.execute(sql)
 			self.tables.add(tableName)
-			return self.execute(sql)
+			return True
+		return False
+
+	def createRabaListTable(self, tableName) :
+		'see createTable()'
+		return self.createTable(tableName, 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_raba_id, value, type, obj_raba_class_name, obj_raba_id, obj_raba_namespace')
+
+	def renameTable(self, old, new) :
+		self.execute('ALTER TABLE %s RENAME TO %s' %(old, new))
+
+	def dropColumnsFromRabaObjTable(self, name, lstFieldsToKeep) :
+		"Removes columns from a RabaObj table. lstFieldsToKeep should not contain raba_id or json fileds"
+		cpy = name+'_copy'
+		sqlFiledsStr = ', '.join(lstFieldsToKeep)
+		self.createTable(cpy, 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT, json, %s' % (sqlFiledsStr))
+		sql = "INSERT INTO %s SELECT %s FROM %s;" % (cpy, 'raba_id, json, %s' % sqlFiledsStr, name)
+		self.execute(sql)
+		self.dropTable(name)
+		self.renameTable(cpy, name)
 
 	def getRabaObjectInfos(self, className, fieldsDct) :
 		definedFields = []
@@ -277,67 +308,71 @@ class RabaConnection(object) :
 			sql = 'SELECT * FROM %s WHERE %s' % (className, strWhere)
 			return self.execute(sql, definedValues)
 
-	def registerRabalist(self, anchor_class_name, anchor_raba_id, relation_name) :
-		table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
+	#def registerRabalist(self, anchor_class_name, anchor_raba_id, relation_name) :
+	#	table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
 
-		self.createTable(table_name, 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_raba_id, value, type, obj_raba_class_name, obj_raba_id, obj_raba_namespace')
+	#	self.createTable(table_name, 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_raba_id, value, type, obj_raba_class_name, obj_raba_id, obj_raba_namespace')
 
-		sql = 'INSERT INTO rabalist_master (anchor_class, anchor_raba_id, relation_name, table_name, length) VALUES (?, ?, ?, ?, ?)'
-		if _DEBUG_MODE : print sql, (anchor_class_name, anchor_raba_id, relation_name, table_name, 0)
-		cur = self.execute(sql, (anchor_class_name, anchor_raba_id, relation_name, table_name, 0))
-		raba_id = cur.lastrowid
-		return raba_id, str(table_name)
+	#	sql = 'INSERT INTO rabalist_master (anchor_class, anchor_raba_id, relation_name, table_name, length) VALUES (?, ?, ?, ?, ?)'
+	#	cur = self.execute(sql, (anchor_class_name, anchor_raba_id, relation_name, table_name, 0))
+	#	raba_id = cur.lastrowid
+	#	return raba_id, str(table_name)
 
-	def unregisterRabalist(self, anchor_class_name, anchor_raba_id, relation_name) :
-		table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
-		sql = 'DELETE FROM rabalist_master WHERE table_name = ? and anchor_raba_id = ?'
-		self.execute(sql, (table_name, anchor_raba_id))
+	#def unregisterRabalist(self, anchor_class_name, anchor_raba_id, relation_name) :
+	#	table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
+	#	sql = 'DELETE FROM rabalist_master WHERE table_name = ? and anchor_raba_id = ?'
+	#	self.execute(sql, (table_name, anchor_raba_id))
 
 	def dropRabalist(self, anchor_class_name, relation_name) :
 		table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
 		self.dropTable(table_name)
 
-		sql = 'DELETE FROM rabalist_master WHERE table_name = ?'
-		self.execute(sql, (table_name, ))
+	#	sql = 'DELETE FROM rabalist_master WHERE table_name = ?'
+	#	self.execute(sql, (table_name, ))
 
 	def makeRabaListTableName(self, anchor_class_name, relation_name) :
 		return 'RabaList_%s_for_%s' % (relation_name, anchor_class_name)
 
-	def updateRabaListLength(self, raba_id, newLength) :
-		sql = "UPDATE rabalist_master SET length = ? WHERE id = ?"
-		self.execute(sql, (newLength, raba_id))
+	#def updateRabaListLength(self, raba_id, newLength) :
+	#	sql = "UPDATE rabalist_master SET length = ? WHERE id = ?"
+	#	self.execute(sql, (newLength, raba_id))
 
-	def getRabaListInfos(self, **fields) :
-		if 'raba_id' in fields :
-			sql = 'SELECT * FROM rabalist_master WHERE id = ?'
-			cur = self.execute(sql, (fields['raba_id'], ))
-		elif 'anchor_class_name' in fields and 'relation_name' in fields and 'anchor_raba_id' in fields :
-			sql = 'SELECT * FROM rabalist_master WHERE table_name = ? and anchor_raba_id = ?'
-			cur = self.execute(sql, (self.makeRabaListTableName(fields['anchor_class_name'], fields['relation_name']), fields['anchor_raba_id']))
-		else :
-			return None
+	#def getRabaListInfos(self, **fields) :
+	#	if 'raba_id' in fields :
+	#		sql = 'SELECT * FROM rabalist_master WHERE id = ?'
+	#		cur = self.execute(sql, (fields['raba_id'], ))
+	#	elif 'anchor_class_name' in fields and 'relation_name' in fields and 'anchor_raba_id' in fields :
+	#		sql = 'SELECT * FROM rabalist_master WHERE table_name = ? and anchor_raba_id = ?'
+	#		cur = self.execute(sql, (self.makeRabaListTableName(fields['anchor_class_name'], fields['relation_name']), fields['anchor_raba_id']))
+	#	else :
+	#		return None
 
-		res = cur.fetchone()
-		if res == None :
-			return None
+	#	res = cur.fetchone()
+	#	if res == None :
+	#		return None
 
-		res2 = cur.fetchone()
-		if res2 != None :
-			raise ValueError("The parameters %s are valid for more than one element" % fields)
+	#	res2 = cur.fetchone()
+	#	if res2 != None :
+	#		raise ValueError("The parameters %s are valid for more than one element" % fields)
 
-		return {'raba_id' : res[0], 'anchor_class' : str(res[1]), 'anchor_raba_id' : str(res[2]), 'relation_name' : str(res[3]), 'table_name' : str(res[4]), 'length' : int(res[5])}
+	#	return {'raba_id' : res[0], 'anchor_class' : str(res[1]), 'anchor_raba_id' : str(res[2]), 'relation_name' : str(res[3]), 'table_name' : str(res[4]), 'length' : int(res[5])}
 
-	def getRabaListTables(self) :
-		sql = 'SELECT * FROM rabalist_master'
-		cur = self.execute.execute(sql)
+	#def getRabaListTables(self) :
+	#	sql = 'SELECT * FROM rabalist_master'
+	#	cur = self.execute.execute(sql)
 
-		res = []
-		for c in cur :
-			res.append(c[0])
+	#	res = []
+	#	for c in cur :
+	#		res.append(c[0])
 
-		return res
+	#	return res
 
 	def commit(self) :
+		"""Only commits it not in a transaction"""
+		if not self.inTransaction :
+			self.connection.commit()
+
+	def forceCommit(self) :
 		"""Forces a commit"""
 		self.connection.commit()
 

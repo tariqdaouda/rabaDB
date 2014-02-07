@@ -79,18 +79,17 @@ class RabaListPupaSingleton_Metaclass(abc.ABCMeta):
 			return clsObj._instances[key]
 
 		connection = RabaConnection(anchorObj._raba_namespace)
+		#infos = connection.getRabaListInfos(anchor_class_name = anchorObj._rabaClass.__name__, anchor_raba_id = anchorObj.raba_id, relation_name = relationName)
+		#if infos == None :
+		#	infos = {}
+		#	infos['raba_id'] = None
+		#	infos['table_name'] = None
+		#	infos['length'] = 0
+		#infos['table_name'] = connection.makeRabaListTableName(anchorObj._rabaClass.__name__, relationName)
+		#for k in kwargs :
+		#	infos[k] = kwargs[k]
 
-		infos = connection.getRabaListInfos(anchor_class_name = anchorObj._rabaClass.__name__, anchor_raba_id = anchorObj.raba_id, relation_name = relationName)
-		if infos == None :
-			infos = {}
-			infos['raba_id'] = None
-			infos['table_name'] = None
-			infos['length'] = 0
-
-		for k in kwargs :
-			infos[k] = kwargs[k]
-
-		obj = super(RabaListPupaSingleton_Metaclass, clsObj).__call__(*args, **infos)
+		obj = super(RabaListPupaSingleton_Metaclass, clsObj).__call__(*args, anchorObj = anchorObj, relationName = relationName)
 
 		clsObj._instances[key] = obj
 		return obj
@@ -169,30 +168,26 @@ class _RabaSingleton_MetaClass(type) :
 
 				cur = con.execute('PRAGMA table_info("%s")' % name)
 				tableColumns = set()
-				fieldsToKill = []
+				tableColumnsToKeep = []
 
+				mustClean = False
 				for c in cur :
-					if c[1] != 'raba_id' and c[1] != 'json' and c[1].lower() not in columns :
-						#print c[1].lower(), columns
-						#Destroy field that have mysteriously desapeared
-						fieldsToKill.append('%s = NULL' % c[1])
-						con.dropRabalist(name, c[1])
-					#else :
-					#	columns[c[1]] = c[0]
+					if c[1] != 'raba_id' and c[1] != 'json' :
+						if c[1].lower() not in columns :
+							mustClean = True
+							con.dropRabalist(name, c[1])
+						else :
+							tableColumnsToKeep.append(c[1])
 
 					tableColumns.add(c[1].lower())
 
-				if len(fieldsToKill) > 0 :
-					sql = 'UPDATE %s SET %s WHERE 1;' % (name , ', '.join(fieldsToKill))
-					if _DEBUG_MODE : print sql
-					cur.execute(sql)
-
 				for k in columns :
 					if k.lower() not in tableColumns :
-						cur.execute('ALTER TABLE %s ADD COLUMN %s' % (name, k))
+						con.execute('ALTER TABLE %s ADD COLUMN %s' % (name, k))
 
-			#columns['raba_id'] = 0
-			#columns['json'] = 1
+				if mustClean :
+					con.dropColumnsFromRabaObjTable(name, tableColumnsToKeep)
+
 			dct['raba_id'] = RabaFields.Primitive()
 			dct['json'] = RabaFields.Primitive()
 			dct['columns'] = columns
@@ -233,7 +228,7 @@ class _RabaSingleton_MetaClass(type) :
 
 		if dbLine != None :
 			if ret.fetchone() != None :
-				raise KeyError("More than one object fit the arguments you've prodided to the constructor")
+				raise ValueError("More than one object fit the arguments you've prodided to the constructor")
 
 			if 'raba_id' in fieldsDct and res == None :
 				raise KeyError("There's no %s with a raba_id = %s" %(self._rabaClass.__name__, fieldsDct['raba_id']))
@@ -369,7 +364,7 @@ class Raba(object):
 			self._saved = True
 
 		if self.raba_id == None :
-			self.raba_id = self.connection.getRabaId(self)
+			self.raba_id = self.connection.getNextRabaId(self)
 
 	def autoclean(self) :
 		"""TODO: Copies the table into a new one droping all the collumns that have all their values to NULL
@@ -430,14 +425,19 @@ class Raba(object):
 				sql = 'UPDATE %s SET %s = ? WHERE raba_id = ?' % (self.__class__.__name__, ' = ?, '.join(self.sqlSave.keys()))
 
 			self.connection.execute(sql, self.sqlSave.values())
-
+			self.connection.commit()
 			self._saved = True
 			self.sqlSave = {}
 			self.sqlSaveQMarks = {}
 			self.listsToSave = {}
 
 	def delete(self) :
-		self.connection.deleteRabaObject(self)
+		if self._saved :
+			for c in self.columnsToLowerCase.itervalues() :
+				if isRabaList(getattr(self, c)) :
+					getattr(self, c).empty()
+			self.connection.delete(table = self.__class__.__name__, where = 'raba_id = ?', values = (self.raba_id, ))
+			self.connection.commit()
 
 	def copy(self) :
 		v = copy.copy(self)
@@ -532,16 +532,22 @@ class RabaListPupa(MutableSequence) :
 	__metaclass__ = RabaListPupaSingleton_Metaclass
 
 	def __init__(self, **kwargs) :
+
 		self._runtimeId = (self.__class__.__name__, random.random()) #this is using only during runtime ex, to avoid circular calls
-		self.raba_id = kwargs['raba_id']
-		self.tableName = kwargs['table_name']
-		self.length = kwargs['length']
 		self.anchorObj = kwargs['anchorObj']
 		self.relationName = kwargs['relationName']
 		self._raba_namespace = self.anchorObj._raba_namespace
+
 		self.connection = RabaConnection(self._raba_namespace)
 
 		self.tableName = self.connection.makeRabaListTableName(self.anchorObj._rabaClass.__name__, self.relationName)
+		if self.connection.createRabaListTable(self.tableName) == None : # table exists
+			sql = 'SELECT %s from %s WHERE raba_id = ?' %(self.relationName, self.anchorObj._rabaClass.__name__)
+			res = self.connection.execute(sql, (self.anchorObj.raba_id,)).fetchone()
+			if res != None :
+				self.length = res[0]
+		else :
+			self.length = 0
 
 	def develop(self) :
 		MutableSequence.__setattr__(self, '__class__', RabaList)
@@ -552,7 +558,8 @@ class RabaListPupa(MutableSequence) :
 		initFromPupa['anchorObj'] = MutableSequence.__getattribute__(self, 'anchorObj')
 		initFromPupa['_raba_namespace'] =  MutableSequence.__getattribute__(self, '_raba_namespace')
 		initFromPupa['tableName'] = MutableSequence.__getattribute__(self, 'tableName')
-		initFromPupa['raba_id'] = MutableSequence.__getattribute__(self, 'raba_id')
+		initFromPupa['length'] = MutableSequence.__getattribute__(self, 'length')
+		#initFromPupa['raba_id'] = MutableSequence.__getattribute__(self, 'raba_id')
 
 		purge = MutableSequence.__getattribute__(self, '__dict__').keys()
 		for k in purge :
@@ -656,32 +663,34 @@ class RabaList(MutableSequence) :
 			self.anchorObj = pupaInit['anchorObj']
 			self.relationName = pupaInit['relationName']
 			self._raba_namespace = self.anchorObj._raba_namespace
-			self.raba_id = pupaInit['raba_id']
+			#self.raba_id = pupaInit['raba_id']
 			self.tableName = pupaInit['tableName']
+			length = pupaInit['length']
 
 			self._setNamespaceConAndConf(self.anchorObj._raba_namespace)
+			self.connection.createRabaListTable(self.tableName)
+			#if self.raba_id == None :
+			#	self.raba_id, self.tableName = self.connection.registerRabalist(self.anchorObj._rabaClass.__name__, self.anchorObj.raba_id, self.relationName)
 
-			if self.raba_id == None :
-				self.raba_id, self.tableName = self.connection.registerRabalist(self.anchorObj._rabaClass.__name__, self.anchorObj.raba_id, self.relationName)
-
-			sql, values = 'SELECT * FROM %s WHERE anchor_raba_id = ?' % self.tableName, (self.anchorObj.raba_id, )
-			cur = self.connection.execute(sql, values)
-			for aidi in cur :
-				self._saved = True
-				value = aidi[2]
-				typ = aidi[3]
-				className = aidi[4]
-				raba_id = aidi[5]
-				raba_namespace = aidi[6]
-				if typ == RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE :
-					self.append(value)
-				elif typ == RabaFields.RABA_FIELD_TYPE_IS_RABA_LIST :
-					raise FutureWarning('RabaList in RabaList not supported')
-				elif typ == RabaFields.RABA_FIELD_TYPE_IS_RABA_OBJECT :
-					classObj = RabaConnection(raba_namespace).getClass(className)
-					self.append(RabaPupa(classObj, raba_id))
-				else :
-					raise ValueError("Unknown type: %s in rabalist %s" % (typ, self))
+			if length > 0 :
+				sql, values = 'SELECT * FROM %s WHERE anchor_raba_id = ?' % self.tableName, (self.anchorObj.raba_id, )
+				cur = self.connection.execute(sql, values)
+				for aidi in cur :
+					self._saved = True
+					value = aidi[2]
+					typ = aidi[3]
+					className = aidi[4]
+					raba_id = aidi[5]
+					raba_namespace = aidi[6]
+					if typ == RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE :
+						self.append(value)
+					elif typ == RabaFields.RABA_FIELD_TYPE_IS_RABA_LIST :
+						raise FutureWarning('RabaList in RabaList not supported')
+					elif typ == RabaFields.RABA_FIELD_TYPE_IS_RABA_OBJECT :
+						classObj = RabaConnection(raba_namespace).getClass(className)
+						self.append(RabaPupa(classObj, raba_id))
+					else :
+						raise ValueError("Unknown type: %s in rabalist %s" % (typ, self))
 
 	def mutated(self) :
 		'returns True if the object has changed since the last save'
@@ -711,8 +720,8 @@ class RabaList(MutableSequence) :
 				if self.relationName == None or self.anchorObj == None :
 					raise ValueError('%s has not been attached to any object, impossible to save it' % s)
 
-				if self.raba_id == None :
-					self.raba_id, self.tableName = self.connection.registerRabalist(self.anchorObj._rabaClass.__name__, self.anchorObj.raba_id, self.relationName)
+				#if self.raba_id == None :
+				#	self.raba_id, self.tableName = self.connection.registerRabalist(self.anchorObj._rabaClass.__name__, self.anchorObj.raba_id, self.relationName)
 
 				if self._saved :
 					self.empty()
@@ -730,7 +739,7 @@ class RabaList(MutableSequence) :
 
 				self.connection.executemany('INSERT INTO %s (anchor_raba_id, value, type, obj_raba_class_name, obj_raba_id, obj_raba_namespace) VALUES (?, ?, ?, ?, ?, ?)' % self.tableName, values)
 
-				self.connection.updateRabaListLength(self.raba_id, len(self))
+				#self.connection.updateRabaListLength(self.raba_id, len(self))
 				self._saved = True
 				self._mutated = False
 				return True
@@ -818,4 +827,4 @@ class RabaList(MutableSequence) :
 		return len(self.data)
 
 	def __repr__(self) :
-		return '[%s raba_id: %s, len: %d, anchor: %s, table: %s]' % (self._runtimeId, self.raba_id, len(self), self.anchorObj, self.tableName)
+		return '[%s raba_id: %s, len: %d, anchor: %s, table: %s]' % (self._runtimeId, len(self), self.anchorObj, self.tableName)
