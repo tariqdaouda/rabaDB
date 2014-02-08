@@ -118,19 +118,29 @@ class _RabaSingleton_MetaClass(type) :
 	_instances = {}
 
 	def __new__(cls, name, bases, dct) :
-		if name != 'Raba' :
-			fields = []
-			columns = {'raba_id' : 0, 'json' : 1}
-			columnsToLowerCase = {'raba_id' : 'raba_id', 'json' : 'json'}
+		if '_raba_abstract' not in dct or not dct['_raba_abstract'] :
+			def getFields_rec(name, sqlFields, columns, columnsToLowerCase, dct, bases) :
+				i = 0
+				if name != "Raba" :
+					for base in bases :
+						i += getFields_rec(base.__name__, sqlFields, columns, columnsToLowerCase, base.__dict__, base.__bases__)
 
-			i = len(columns)
-			for k, v in dct.items():
-				sk = str(k)
-				if RabaFields.isField(v) :
-					fields.append(sk)
-					columns[sk.lower()] = i
-					columnsToLowerCase[sk.lower()] = sk
-					i += 1
+				for k, v in dct.iteritems() :
+					if RabaFields.isField(v) :
+						sk = str(k)
+						if k.lower() != 'raba_id' and k.lower() != 'json' :
+							sqlFields.append(sk)
+						#columns[sk.lower()] = i
+						columns[sk] = i
+						columnsToLowerCase[sk.lower()] = sk
+						i += 1
+				return i
+
+			sqlFields = []
+			columns = {}
+			columnsToLowerCase = {}
+			getFields_rec(name, sqlFields, columns, columnsToLowerCase, dct, bases)
+
 			try :
 				con = RabaConnection(dct['_raba_namespace'])
 			except KeyError :
@@ -139,17 +149,21 @@ class _RabaSingleton_MetaClass(type) :
 			uniqueStr = ''
 			if '_raba_uniques' in dct :
 				for c in dct['_raba_uniques'] :
-					uniqueStr += 'UNIQUE %s ON CONFLICT REPLACE, ' % str(c)
-
+					if type(c) is types.StringType :
+						uniqueStr += 'UNIQUE (%s) ON CONFLICT REPLACE, ' % c
+					elif len(c) == 1 :
+						uniqueStr += 'UNIQUE (%s) ON CONFLICT REPLACE, ' % c[0]
+					else :
+						uniqueStr += 'UNIQUE %s ON CONFLICT REPLACE, ' % str(c)
 			uniqueStr = uniqueStr[:-2]
 
 			if not con.tableExits(name) :
 				idJsonStr = 'raba_id INTEGER PRIMARY KEY, json '
-				if len(fields) > 0 :
+				if len(sqlFields) > 0 :
 					if len(uniqueStr) > 0 :
-						con.createTable(name, '%s, %s, %s' % (idJsonStr, ', '.join(list(fields)), uniqueStr))
+						con.createTable(name, '%s, %s, %s' % (idJsonStr, ', '.join(list(sqlFields)), uniqueStr))
 					else :
-						con.createTable(name, '%s, %s' % (idJsonStr, ', '.join(list(fields))))
+						con.createTable(name, '%s, %s' % (idJsonStr, ', '.join(list(sqlFields))))
 				else :
 					con.createTable(name, '%s' % idJsonStr)
 
@@ -173,7 +187,7 @@ class _RabaSingleton_MetaClass(type) :
 				mustClean = False
 				for c in cur :
 					if c[1] != 'raba_id' and c[1] != 'json' :
-						if c[1].lower() not in columns :
+						if c[1].lower() not in columnsToLowerCase :
 							mustClean = True
 							con.dropRabalist(name, c[1])
 						else :
@@ -187,9 +201,10 @@ class _RabaSingleton_MetaClass(type) :
 
 				if mustClean :
 					con.dropColumnsFromRabaObjTable(name, tableColumnsToKeep)
+					con.forceCommit()
 
-			dct['raba_id'] = RabaFields.Primitive()
-			dct['json'] = RabaFields.Primitive()
+			#dct['raba_id'] = RabaFields.Primitive()
+			#dct['json'] = RabaFields.Primitive()
 			dct['columns'] = columns
 			dct['columnsToLowerCase'] = columnsToLowerCase
 
@@ -233,8 +248,11 @@ class _RabaSingleton_MetaClass(type) :
 			if 'raba_id' in fieldsDct and res == None :
 				raise KeyError("There's no %s with a raba_id = %s" %(self._rabaClass.__name__, fieldsDct['raba_id']))
 
-			raba_id = dbLine[cls.columns['raba_id']]
+			#print dbLine
+			#print cls.columns
+			raba_id = dbLine[0]
 			key = makeRabaObjectSingletonKey(cls.__name__, cls._raba_namespace, raba_id)
+			#print raba_id, cls._instances, key
 			if key in cls._instances :
 				return cls._instances[key]
 
@@ -311,6 +329,9 @@ class RabaPupa(object) :
 class Raba(object):
 	"All raba object inherit from this class"
 	__metaclass__ = _RabaSingleton_MetaClass
+	raba_id = RabaFields.Primitive()
+	json = RabaFields.Primitive()
+	_raba_abstract = True
 
 	def __init__(self, *a, **b) :
 		pass
@@ -320,7 +341,7 @@ class Raba(object):
 		self.json = dbLine[self.__class__.columns['json']]
 
 		lists = []
-		for kk, i in self.columns.items() :
+		for kk, i in self.columns.itertems() :
 			k = self.columnsToLowerCase[kk.lower()]
 			elmt = getattr(self._rabaClass, k)
 			if RabaFields.isPrimitiveField(elmt) :
@@ -366,11 +387,6 @@ class Raba(object):
 		if self.raba_id == None :
 			self.raba_id = self.connection.getNextRabaId(self)
 
-	def autoclean(self) :
-		"""TODO: Copies the table into a new one droping all the collumns that have all their values to NULL
-		and drop the tables that correspond to these tables"""
-		raise FutureWarning("sqlite does not support column droping, work aroun not implemented yet")
-
 	def pupa(self) :
 		"""returns a pupa version of self"""
 		return RabaPupa(self.__class__, self.raba_id)
@@ -381,8 +397,9 @@ class Raba(object):
 
 	@classmethod
 	def addIndex(cls, field) :
+		"add an index for field, indexes take place and slow down saves and deletes but they speed up a lot everything else. If you are going to do a lot of saves/deletes drop the indexes first re-add them afterwards"
 		con = RabaConnection(cls._raba_namespace)
-		if RabaFields.isRabaListField(object.__getattribute__(cls, field)) :
+		if RabaFields.isRabaListField(getattr(cls, field)) :
 			name = con.makeRabaListTableName(cls.__name__, field)
 			ffield = 'anchor_raba_id'
 		else :
@@ -392,9 +409,10 @@ class Raba(object):
 		con.createIndex(name, ffield)
 
 	@classmethod
-	def removeIndex(cls, field) :
+	def dropIndex(cls, field) :
+		"remove the indexation for field"
 		con = RabaConnection(cls._raba_namespace)
-		if RabaFields.isRabaListField(object.__getattribute__(cls, field)) :
+		if RabaFields.isRabaListField(getattr(cls, field)) :
 			name = con.makeRabaListTableName(cls.__name__, field)
 			ffield = 'anchor_raba_id'
 		else :
@@ -405,7 +423,7 @@ class Raba(object):
 
 	def mutated(self) :
 		'returns True if the object has changed since the last save'
-		return len(self.sqlSave) > 0
+		return len(self.sqlSave) > 0 or len(self.listsToSave) > 0
 
 	def save(self) :
 		if self.mutated() :
@@ -737,7 +755,7 @@ class RabaList(MutableSequence) :
 					else :
 						values.append((self.anchorObj.raba_id, buffer(cPickle.dumps(e)), RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE, None, None, None))
 
-				self.connection.executemany('INSERT INTO %s (anchor_raba_id, value, type, obj_raba_class_name, obj_raba_id, obj_raba_namespace) VALUES (?, ?, ?, ?, ?, ?)' % self.tableName, values)
+				self.connection.executeMany('INSERT INTO %s (anchor_raba_id, value, type, obj_raba_class_name, obj_raba_id, obj_raba_namespace) VALUES (?, ?, ?, ?, ?, ?)' % self.tableName, values)
 
 				#self.connection.updateRabaListLength(self.raba_id, len(self))
 				self._saved = True

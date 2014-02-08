@@ -53,7 +53,7 @@ class RabaConnection(object) :
 		self.savedObject = set()
 		self.inTransaction = False
 
-		self.enableQueryPrint(False)
+		self.enableQueryPrint(True)
 		self.enableStats(False)
 
 		sql = "SELECT name, type FROM sqlite_master WHERE type='table'"
@@ -158,6 +158,18 @@ class RabaConnection(object) :
 			self._logQuery(sql, values)
 		return cur
 
+	def executemany(self, sql, values = [()]) :
+		return self.executeMany(sql, values)
+
+	def executeMany(self, sql, values = [()]) :
+		sql = sql.strip()
+		if self._printQueries : print sql, values
+		cur = self.connection.cursor()
+		cur.executemany(sql, values)
+		if self._enableStats :
+			self._logQuery(sql, values)
+		return cur
+
 	def printStats(self) :
 		if self._enableStats :
 			t = time.time() - self.startTime
@@ -180,13 +192,6 @@ class RabaConnection(object) :
 				print "\t\t ratio (run time (sc)):", v/t
 		else :
 			print "====Raba Connection %s stats====> you must enable stats first" % (self.namespace)
-
-	def executeMany(self, sql, values = [()]) :
-		sql = sql.strip()
-		if _DEBUG_MODE : print sql, values
-		cur = self.connection.cursor()
-		cur.executemany(sql, values)
-		return cur
 
 	def beginTransaction(self) :
 		"Raba commits at each save, unless you begin a transaction in wich cas everything will be commited when endTransaction() is called"
@@ -286,6 +291,9 @@ class RabaConnection(object) :
 
 	def dropColumnsFromRabaObjTable(self, name, lstFieldsToKeep) :
 		"Removes columns from a RabaObj table. lstFieldsToKeep should not contain raba_id or json fileds"
+		if len(lstFieldsToKeep) == 0 :
+			raise ValueError("There are no fields to keep")
+
 		cpy = name+'_copy'
 		sqlFiledsStr = ', '.join(lstFieldsToKeep)
 		self.createTable(cpy, 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT, json, %s' % (sqlFiledsStr))
