@@ -49,6 +49,7 @@ class RabaQuery :
 		if type(rabaClass) is types.StringType :
 			self._raba_namespace = namespace
 			self.con = RabaConnection(self._raba_namespace)
+			self.rabaClass = self.con.getClass(rabaClass)
 		else :
 			self.rabaClass = rabaClass
 			self._raba_namespace = self.rabaClass._raba_namespace
@@ -59,8 +60,8 @@ class RabaQuery :
 
 		#self.fctPattern = re.compile("\s*([^\s]+)\s*\(\s*([^\s]+)\s*\)\s*([=><])\s*([^\s]+)\s*")
 		self.fieldPattern = re.compile("\s*([^\s\(\)]+)\s*([=><]|([L|l][I|i][K|k][E|e]))\s*(.+)")
-		self.operators = set(['LIKE', '=', '<', '>', 'IS'])
-		self.artOperators = set(['+', '-', '*', '/', '<', '>', '%', '=', '>=', '<=', '<>', '!='])
+		self.operators = set(['LIKE', '=', '<', '>', '=', '>=', '<=', '<>', '!=', 'IS'])
+		#self.artOperators = set(['+', '-', '*', '/', '%'])
 
 	def _parseArtOperators(self, k) :
 		#TODO
@@ -82,9 +83,9 @@ class RabaQuery :
 		for k, v in dstF.iteritems() :
 			sk = k.split(' ')
 			if len(sk) == 2 :
-				operator = sk[-1].strip()
+				operator = sk[-1].strip().upper()
 				if operator not in self.operators :
-					raise ValueError('Unrecognized operator %s' % operator)
+					raise ValueError('Unrecognized operator "%s"' % operator)
 				kk = '%s.%s'% (self.rabaClass.__name__, k)
 			elif len(sk) == 1 :
 				operator = "="
@@ -97,7 +98,7 @@ class RabaQuery :
 			else :
 				vv = v
 
-			if sk[0].find('->') > -1 :
+			if sk[0].find('.') > -1 :
 				joink, joinv = self._parseJoint(sk[0], operator, vv)
 				filts[joink] = joinv
 			else :
@@ -113,7 +114,7 @@ class RabaQuery :
 				operator = match.group(2)
 				value = match.group(4)
 
-				if field.find('->') > -1 :
+				if field.find('.') > -1 :
 					joink, joinv = self._parseJoint(field, operator, value)
 					filts[joink] = joinv
 				else :
@@ -121,42 +122,38 @@ class RabaQuery :
 
 		self.filters.append(filts)
 
+	"""def testRabaClassAttribute(self, currClass, field) :
+		attr = getattr(currClass, field)
+		print attr, field
+		assert RabaFields.isRabaObjectField(attr)
+		if attr.className == None :
+			raise ValueError('Attribute %s has no mandatory RabaClass' % field)
+
+		if attr.classNamespace != None and attr.classNamespace != self._raba_namespace :
+			raise ValueError("Can't perform joints accros namespaces. My namespace is: '%s', %s->%s's is: '%s'" % (self._raba_namespace, currClass.__name__, attr.className, attr.classNamespace))
+		return attr"""
+
 	def _parseJoint(self, strJoint, lastOperator, value) :
-		def testAttribute(currClass, field) :
-			attr = getattr(currClass, field)
-			assert RabaFields.fieldIsRabaObjectt(attr)
-			if attr.className == None :
-				raise ValueError('Attribute %s has no mandatory RabaClass' % field)
-
-			if attr.classNamespace != None and attr.classNamespace != self._raba_namespace :
-				raise ValueError("Can't perform joints accros namespaces. My namespace is: '%s', %s->%s's is: '%s'" % (self._raba_namespace, currClass.__name__, attr.className, attr.classNamespace))
-			return attr
-
-		fields = strJoint.split('->')
+		fields = strJoint.split('.')
 		conditions = []
 
 		currClass = self.rabaClass
 		self.tables.add(currClass.__name__)
 		for f in fields[:1] :
-			attr = testAttribute(currClass, f)
+			attr = getattr(currClass, f)
+			if not RabaFields.isRabaObjectField(attr) :
+				raise ValueError("Attribute %s is not for a Raba Object, can't process join" % f)
+
 			self.tables.add(attr.className)
 			conditions.append('%s.%s = %s.json' %(currClass.__name__, f, attr.className))
 
 			currClass = self.con.getClass(attr.className)
 
-		lastField = fields[-1].split('.')
-
-		attr = testAttribute(currClass, lastField[0])
-		conditions.append('%s.%s = %s.json' %(currClass.__name__, lastField[0], attr.className))
-		if len(lastField) == 2 :
-			conditions.append('%s.%s' %(attr.className, lastField[-1]))
-		elif len(lastField) == 1 :
-			if RabaFields.fieldIsRabaObjectt(attr) :
-				conditions.append('%s.json' %(attr.className))
-			else :
-				conditions.append('%s' %(attr.className))
+		lastAttr = getattr(currClass, fields[-1])
+		if RabaFields.isRabaObjectField(lastAttr) :
+			conditions.append('%s.json' %(lastAttr.className))
 		else :
-			raise ValueError('Invalid query ending with %s' % field[-1])
+			conditions.append('%s.%s' %(attr.className, fields[-1]))
 
 		self.tables.add(attr.className)
 		return '%s %s' % (' AND '.join(conditions), lastOperator), value
@@ -177,7 +174,7 @@ class RabaQuery :
 		else :
 			tablesStr =  ', '.join(self.tables)
 
-		sql = 'SELECT %s.raba_id from %s WHERE %s' % (self.rabaClass.__name__, tablesStr, sqlFilters)
+		sql = 'SELECT %s.raba_id FROM %s WHERE %s' % (self.rabaClass.__name__, tablesStr, sqlFilters)
 
 		return (sql, sqlValues)
 

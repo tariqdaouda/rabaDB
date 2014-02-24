@@ -67,9 +67,9 @@ class RabaListPupaSingleton_Metaclass(abc.ABCMeta):
 	_instances = {}
 
 	def __call__(clsObj, *args, **kwargs):
-
 		anchorObj = kwargs['anchorObj']
 		relationName = kwargs['relationName']
+		length = kwargs['length']
 
 		key = (anchorObj._runtimeId, relationName)
 
@@ -79,17 +79,8 @@ class RabaListPupaSingleton_Metaclass(abc.ABCMeta):
 			return clsObj._instances[key]
 
 		connection = RabaConnection(anchorObj._raba_namespace)
-		#infos = connection.getRabaListInfos(anchor_class_name = anchorObj._rabaClass.__name__, anchor_raba_id = anchorObj.raba_id, relation_name = relationName)
-		#if infos == None :
-		#	infos = {}
-		#	infos['raba_id'] = None
-		#	infos['table_name'] = None
-		#	infos['length'] = 0
-		#infos['table_name'] = connection.makeRabaListTableName(anchorObj._rabaClass.__name__, relationName)
-		#for k in kwargs :
-		#	infos[k] = kwargs[k]
 
-		obj = super(RabaListPupaSingleton_Metaclass, clsObj).__call__(*args, anchorObj = anchorObj, relationName = relationName)
+		obj = super(RabaListPupaSingleton_Metaclass, clsObj).__call__(*args, anchorObj = anchorObj, relationName = relationName, length = length)
 
 		clsObj._instances[key] = obj
 		return obj
@@ -183,24 +174,35 @@ class _RabaSingleton_MetaClass(type) :
 				cur = con.execute('PRAGMA table_info("%s")' % name)
 				tableColumns = set()
 				tableColumnsToKeep = []
+				tableColumnsToDrop = []
 
 				mustClean = False
+				columns = {}
+				columns['raba_id'] = 0
+				columns['json'] = 1
+				i = len(columns)
 				for c in cur :
 					if c[1] != 'raba_id' and c[1] != 'json' :
 						if c[1].lower() not in columnsToLowerCase :
 							mustClean = True
 							con.dropRabalist(name, c[1])
+							tableColumnsToDrop.append(c[1])
 						else :
 							tableColumnsToKeep.append(c[1])
-
+							columns[columnsToLowerCase[c[1].lower()]] = i
+							i += 1
 					tableColumns.add(c[1].lower())
-
-				for k in columns :
-					if k.lower() not in tableColumns :
-						con.execute('ALTER TABLE %s ADD COLUMN %s' % (name, k))
 
 				if mustClean :
 					con.dropColumnsFromRabaObjTable(name, tableColumnsToKeep)
+
+				mustAlter = False
+				for k in columnsToLowerCase :
+					if k not in tableColumns :
+						con.execute('ALTER TABLE %s ADD COLUMN %s' % (name, columnsToLowerCase[k]))
+						mustAlter = True
+
+				if mustClean or mustAlter :
 					con.forceCommit()
 
 			#dct['raba_id'] = RabaFields.Primitive()
@@ -214,23 +216,26 @@ class _RabaSingleton_MetaClass(type) :
 
 		return type.__new__(cls, name, bases, dct)
 
-	def __call__(cls, **fieldsDct) :
+	def __call__(cls, *args, **fieldsDct) :
 		if cls == Raba :
 			return super(_RabaSingleton_MetaClass, cls).__call__(**fieldsDct)
 
 		if 'raba_id' in fieldsDct :
 			key = makeRabaObjectSingletonKey(cls.__name__, cls._raba_namespace, fieldsDct['raba_id'])
 			if key in cls._instances :
+				print "sssyyyyyyyyyyyyys"
 				return cls._instances[key]
 		else :
 			key = None
 
 		params = copy.copy(fieldsDct)
+		nonRabaParams = {}
 		for p, v in params.items() :
 			if p in cls.columns :
 				if isRabaObject(v) :
 					params[p] = v.getJsonEncoding()
 			else :
+				nonRabaParams[p] = v
 				del(params[p])
 
 		connection = RabaConnection(cls._raba_namespace)
@@ -248,22 +253,22 @@ class _RabaSingleton_MetaClass(type) :
 			if 'raba_id' in fieldsDct and res == None :
 				raise KeyError("There's no %s with a raba_id = %s" %(self._rabaClass.__name__, fieldsDct['raba_id']))
 
-			#print dbLine
-			#print cls.columns
 			raba_id = dbLine[0]
 			key = makeRabaObjectSingletonKey(cls.__name__, cls._raba_namespace, raba_id)
-			#print raba_id, cls._instances, key
 			if key in cls._instances :
 				return cls._instances[key]
 
-			obj = type.__call__(cls)
-			obj._raba__init__(initDbLine = dbLine, **fieldsDct)
-			cls._instances[key] = obj
+			obj = Raba.__new__(cls, *args, **nonRabaParams)
+			obj._raba__init__(initDbLine = dbLine)
+			obj.__init__(*args, **nonRabaParams)
+
+			if not hasattr(cls, '_raba_not_a_singleton') or not getattr(cls, '_raba_not_a_singleton') :
+				cls._instances[key] = obj
 
 		elif len(params) > 0 :
 			raise KeyError("Couldn't find any object that fit the arguments you've prodided to the constructor")
 		else :
-			obj = type.__call__(cls, **fieldsDct)
+			obj = type.__call__(cls, *args, **fieldsDct)
 			obj._raba__init__(**fieldsDct)
 
 		return obj
@@ -336,12 +341,19 @@ class Raba(object):
 	def __init__(self, *a, **b) :
 		pass
 
+	def unreference(self) :
+		"explicit deletes the object from the singleton reference dictionary. This is mandatory to be able to delete the object using del(). Also, any attempt to reload an object with the same parameters will result un a new instance being created"
+		try :
+			del(self.__class__._instances[makeRabaObjectSingletonKey(self.__class__.__name__, self._raba_namespace, self.raba_id)])
+		except KeyError :
+			pass
+
 	def _initDbLine(self, dbLine) :
 		self.raba_id = dbLine[self.__class__.columns['raba_id']]
 		self.json = dbLine[self.__class__.columns['json']]
 
 		lists = []
-		for kk, i in self.columns.itertems() :
+		for kk, i in self.columns.iteritems() :
 			k = self.columnsToLowerCase[kk.lower()]
 			elmt = getattr(self._rabaClass, k)
 			if RabaFields.isPrimitiveField(elmt) :
@@ -356,15 +368,16 @@ class Raba(object):
 					objClass = RabaConnection(val["raba_namespace"]).getClass(val["className"])
 					self.__setattr__(k, RabaPupa(objClass, val["raba_id"]))
 			elif RabaFields.isRabaListField(elmt) :
-				lists.append(k)
+				lists.append((k, int(dbLine[i])))
 			else :
 				raise ValueError("Unable to set field %s to %s in Raba object %s" %(k, dbLine[i], self._rabaClass.__name__))
 
-		for k in lists :
-			rlp = RabaListPupa(anchorObj = self, relationName = k)
+		for k, leng in lists :
+			rlp = RabaListPupa(anchorObj = self, relationName = k, length = leng)
 			self.__setattr__(k, rlp)
 
 	def _raba__init__(self, **fieldsSet) :
+
 		self.sqlSave = {}
 		self.sqlSaveQMarks = {}
 		self.listsToSave = {}
@@ -396,7 +409,7 @@ class Raba(object):
 		pass
 
 	@classmethod
-	def addIndex(cls, field) :
+	def requireIndex(cls, field) :
 		"add an index for field, indexes take place and slow down saves and deletes but they speed up a lot everything else. If you are going to do a lot of saves/deletes drop the indexes first re-add them afterwards"
 		con = RabaConnection(cls._raba_namespace)
 		if RabaFields.isRabaListField(getattr(cls, field)) :
@@ -407,6 +420,7 @@ class Raba(object):
 			ffield = field
 
 		con.createIndex(name, ffield)
+		con.commit()
 
 	@classmethod
 	def dropIndex(cls, field) :
@@ -420,6 +434,7 @@ class Raba(object):
 			ffield = field
 
 		con.dropIndex(name, ffield)
+		con.commit()
 
 	def mutated(self) :
 		'returns True if the object has changed since the last save'
@@ -491,6 +506,7 @@ class Raba(object):
 					vSQL = buffer(cPickle.dumps(vv))
 
 				self.sqlSave[k] = vSQL
+
 				if not self._saved : #this dict is only for optimisation purpose for generating the insert sql
 					self.sqlSaveQMarks[k] = '?'
 			else :
@@ -500,8 +516,8 @@ class Raba(object):
 					except :
 						raise ValueError("Unable to set '%s' to value '%s'. Value is not a valid RabaList" % (k, vv))
 
-				currList = getattr(self, k)
-				if vv is not currList and len(currList) > 0 :
+				currList = object.__getattribute__(self, k)
+				if not RabaFields.isRabaListField(currList) and vv is not currList and len(currList) > 0 :
 					currList.erase()
 					self.connection.unregisterRabalist(anchor_class_name = self.__class__.__name__, anchor_raba_id = self.raba_id, relation_name = k)
 
@@ -514,7 +530,7 @@ class Raba(object):
 		try :
 			elmt = object.__getattribute__(self, k)
 			if RabaFields.isRabaListField(elmt) : #if empty
-				elmt = RabaListPupa(anchorObj = self, relationName = k)
+				elmt = RabaListPupa(anchorObj = self, relationName = k, length = -1)
 				object.__setattr__(self, k, elmt)
 			elif RabaFields.isField(elmt) :
 				elmt = elmt.default
@@ -535,14 +551,15 @@ class Raba(object):
 	def __repr__(self) :
 		return "<Raba obj: %s, raba_id: %s>" % (self._runtimeId, self.raba_id)
 
-	def help(self) :
+	@classmethod
+	def help(cls) :
 		"returns a string of parameters"
 		fil = []
-		for k, v in self.__class__.__dict__.items() :
+		for k, v in cls.__dict__.items() :
 			if RabaFields.isField(v) :
 				fil.append(k)
 
-		return '\n==========\nAvailable fields for %s:\n--\n%s\n=======\n' %(self.__class__.__name__, ', '.join(fil))
+		return 'Available fields for %s: %s' %(cls.__name__, ', '.join(fil))
 
 class RabaListPupa(MutableSequence) :
 
@@ -550,22 +567,22 @@ class RabaListPupa(MutableSequence) :
 	__metaclass__ = RabaListPupaSingleton_Metaclass
 
 	def __init__(self, **kwargs) :
-
 		self._runtimeId = (self.__class__.__name__, random.random()) #this is using only during runtime ex, to avoid circular calls
 		self.anchorObj = kwargs['anchorObj']
 		self.relationName = kwargs['relationName']
+		self.length = kwargs['length']
 		self._raba_namespace = self.anchorObj._raba_namespace
 
 		self.connection = RabaConnection(self._raba_namespace)
 
 		self.tableName = self.connection.makeRabaListTableName(self.anchorObj._rabaClass.__name__, self.relationName)
-		if self.connection.createRabaListTable(self.tableName) == None : # table exists
-			sql = 'SELECT %s from %s WHERE raba_id = ?' %(self.relationName, self.anchorObj._rabaClass.__name__)
-			res = self.connection.execute(sql, (self.anchorObj.raba_id,)).fetchone()
-			if res != None :
-				self.length = res[0]
-		else :
-			self.length = 0
+		#if self.connection.createRabaListTable(self.tableName) == None : # table exists
+		#	sql = 'SELECT %s from %s WHERE raba_id = ?' %(self.relationName, self.anchorObj._rabaClass.__name__)
+		#	res = self.connection.execute(sql, (self.anchorObj.raba_id,)).fetchone()
+		#	if res != None :
+		#		self.length = res[0]
+		#else :
+		#	self.length = 0
 
 	def develop(self) :
 		MutableSequence.__setattr__(self, '__class__', RabaList)
@@ -625,6 +642,8 @@ class RabaListPupa(MutableSequence) :
 		return "[%s length: %d, relationName: %s, anchorObj: %s, raba_id: %s]" % (self._runtimeId, self.length, self.relationName, self.anchorObj, self.raba_id)
 
 	def __len__(self) :
+		if self.length < 0 :
+			self.develop()
 		return self.length
 
 class RabaList(MutableSequence) :
@@ -845,4 +864,4 @@ class RabaList(MutableSequence) :
 		return len(self.data)
 
 	def __repr__(self) :
-		return '[%s raba_id: %s, len: %d, anchor: %s, table: %s]' % (self._runtimeId, len(self), self.anchorObj, self.tableName)
+		return '[ %s, len: %d, anchor: %s, table: %s]' % (self._runtimeId, len(self), self.anchorObj, self.tableName)

@@ -53,8 +53,9 @@ class RabaConnection(object) :
 		self.savedObject = set()
 		self.inTransaction = False
 
-		self.enableQueryPrint(True)
+		self.enableQueryPrint(False)
 		self.enableStats(False)
+		self.enableDebug(False)
 
 		sql = "SELECT name, type FROM sqlite_master WHERE type='table'"
 		cur = self.execute(sql)
@@ -106,12 +107,21 @@ class RabaConnection(object) :
 		self.queryCounts = {'INSERT' : 0, 'SELECT' : 0, 'UPDATE' : 0, 'DELETE' : 0, 'DROP' : 0, 'PRAGMA' : 0,'CREATE' : 0, 'TOTAL': 0}
 
 	def enableStats(self, bol, logQueries = False) :
+		"If bol == True, Raba will keep a count of every query time performed, logQueries == True it will also keep a record of all the queries "
 		self._enableStats = bol
 		self._logQueries = logQueries
 		if bol :
 			self._enableStats = True
 			self.eraseStats()
 			self.startTime = time.time()
+
+	def enableQueryPrint(self, printQueries) :
+		"if printQueries == True, prints each query before performing it"
+		self._printQueries = printQueries
+
+	def enableDebug(self, bolean) :
+		"if bolean == True, prints each query before performing it and ask to continue (c) or stop (s). if the user enters (s) an exception raised letting you know what caused the querie to be generated"
+		self._debugSQL = bolean
 
 	def _logQuery(self, sql, values) :
 		if self._enableStats :
@@ -145,17 +155,26 @@ class RabaConnection(object) :
 					vals.append(repr(v))
 				self.queryLogs[k].append((sql, vals))
 
-	def enableQueryPrint(self, printQueries) :
-		self._printQueries = printQueries
+	def _debugActions(self, sql, values) :
+		if self._debugSQL :
+			print "run: %s %s ?\n(c)ontinue/(s)top:" % (sql, values)
+			while True :
+				val = raw_input().lower()
+				if val == 's' :
+					raise Exception("DEBUG STOPED!")
+				elif val == 'c' :
+					break
+		elif self._printQueries : print sql, values
+
+		if self._enableStats :
+			self._logQuery(sql, values)
 
 	def execute(self, sql, values = ()) :
 		"executes an sql command for you or appends it to the current transacations. returns a cursor"
 		sql = sql.strip()
-		if self._printQueries : print sql, values
+		self._debugActions(sql, values)
 		cur = self.connection.cursor()
 		cur.execute(sql, values)
-		if self._enableStats :
-			self._logQuery(sql, values)
 		return cur
 
 	def executemany(self, sql, values = [()]) :
@@ -163,12 +182,9 @@ class RabaConnection(object) :
 
 	def executeMany(self, sql, values = [()]) :
 		sql = sql.strip()
-		if self._printQueries : print sql, values
+		self._debugActions(sql, values)
 		cur = self.connection.cursor()
 		cur.executemany(sql, values)
-		if self._enableStats :
-			self._logQuery(sql, values)
-		return cur
 
 	def printStats(self) :
 		if self._enableStats :
@@ -316,64 +332,12 @@ class RabaConnection(object) :
 			sql = 'SELECT * FROM %s WHERE %s' % (className, strWhere)
 			return self.execute(sql, definedValues)
 
-	#def registerRabalist(self, anchor_class_name, anchor_raba_id, relation_name) :
-	#	table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
-
-	#	self.createTable(table_name, 'raba_id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_raba_id, value, type, obj_raba_class_name, obj_raba_id, obj_raba_namespace')
-
-	#	sql = 'INSERT INTO rabalist_master (anchor_class, anchor_raba_id, relation_name, table_name, length) VALUES (?, ?, ?, ?, ?)'
-	#	cur = self.execute(sql, (anchor_class_name, anchor_raba_id, relation_name, table_name, 0))
-	#	raba_id = cur.lastrowid
-	#	return raba_id, str(table_name)
-
-	#def unregisterRabalist(self, anchor_class_name, anchor_raba_id, relation_name) :
-	#	table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
-	#	sql = 'DELETE FROM rabalist_master WHERE table_name = ? and anchor_raba_id = ?'
-	#	self.execute(sql, (table_name, anchor_raba_id))
-
 	def dropRabalist(self, anchor_class_name, relation_name) :
 		table_name = self.makeRabaListTableName(anchor_class_name, relation_name)
 		self.dropTable(table_name)
 
-	#	sql = 'DELETE FROM rabalist_master WHERE table_name = ?'
-	#	self.execute(sql, (table_name, ))
-
 	def makeRabaListTableName(self, anchor_class_name, relation_name) :
 		return 'RabaList_%s_for_%s' % (relation_name, anchor_class_name)
-
-	#def updateRabaListLength(self, raba_id, newLength) :
-	#	sql = "UPDATE rabalist_master SET length = ? WHERE id = ?"
-	#	self.execute(sql, (newLength, raba_id))
-
-	#def getRabaListInfos(self, **fields) :
-	#	if 'raba_id' in fields :
-	#		sql = 'SELECT * FROM rabalist_master WHERE id = ?'
-	#		cur = self.execute(sql, (fields['raba_id'], ))
-	#	elif 'anchor_class_name' in fields and 'relation_name' in fields and 'anchor_raba_id' in fields :
-	#		sql = 'SELECT * FROM rabalist_master WHERE table_name = ? and anchor_raba_id = ?'
-	#		cur = self.execute(sql, (self.makeRabaListTableName(fields['anchor_class_name'], fields['relation_name']), fields['anchor_raba_id']))
-	#	else :
-	#		return None
-
-	#	res = cur.fetchone()
-	#	if res == None :
-	#		return None
-
-	#	res2 = cur.fetchone()
-	#	if res2 != None :
-	#		raise ValueError("The parameters %s are valid for more than one element" % fields)
-
-	#	return {'raba_id' : res[0], 'anchor_class' : str(res[1]), 'anchor_raba_id' : str(res[2]), 'relation_name' : str(res[3]), 'table_name' : str(res[4]), 'length' : int(res[5])}
-
-	#def getRabaListTables(self) :
-	#	sql = 'SELECT * FROM rabalist_master'
-	#	cur = self.execute.execute(sql)
-
-	#	res = []
-	#	for c in cur :
-	#		res.append(c[0])
-
-	#	return res
 
 	def commit(self) :
 		"""Only commits it not in a transaction"""
