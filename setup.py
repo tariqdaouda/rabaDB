@@ -1,4 +1,5 @@
-import time
+import time, types
+import time, types
 import sqlite3 as sq
 
 #If set to True will print all sql commands and other goodies. Will also some checkings
@@ -66,28 +67,49 @@ class RabaConnection(object) :
 		#	elif n[1] == 'index' :
 		#		self.indexes.add(n[0])
 
-		#if not self.tableExits('rabalist_master') :
-		#	sql = "CREATE TABLE rabalist_master (id INTEGER PRIMARY KEY AUTOINCREMENT, anchor_class NOT NULL, anchor_raba_id, relation_name NOT NULL, table_name NOT NULL, length DEFAULT 0)"
-		#	self.execute(sql)
-		#	self.connection.commit()
-		#	self.tables.add('rabalist_master')
-
 		if not self.tableExits('raba_tables_constraints') :
 			sql = "CREATE TABLE raba_tables_constraints (table_name NOT NULL, constraints, PRIMARY KEY(table_name))"
 			self.execute(sql)
 			self.connection.commit()
-			#self.tables.add('raba_tables_constraints')
 
 		self.currentIds = {} #class name -> current max id
 
-	def makeIndexTableName(self, table, field) :
-		return "raba_%s_index_on_%s" %(table, field)
-
-	def createIndex(self, table, field) :
-		"Creates indexes for Raba Class a fields resulting in significantly faster SELECTs but potentially slower UPADTES/INSERTS and a bigger DBs"
-		indexTable = self.makeIndexTableName(table, field)
+	def getTables(self) :
+		"return a set of all tables"
+		return self.tables
+	
+	def getIndices(self) :
+		"returns a list of all indices"
+		sql = "SELECT name, type FROM sqlite_master WHERE type='index'"
+		cur = self.execute(sql)
+		l = []
+		for n in cur :
+			l.append(n[0])
+		
+		return l
+	
+	def purgeIndices(self) :
+		"drops all indices created by Raba"
+		for n in self.listIndices() :
+			if n.find('raba') == 0 :
+				self.dropTable(n)
+		
+	def makeIndexTableName(self, table, fields) :
+		if type(fields) is types.ListType :
+			return "raba_%s_index_on_%s" %(table, '_x_'.join(fields))
+		else :
+			return "raba_%s_index_on_%s" %(table, fields)
+		
+	def createIndex(self, table, fields) :
+		"""Creates indexes for Raba Class a fields resulting in significantly faster SELECTs but potentially slower UPADTES/INSERTS and a bigger DBs
+		Fields can be a list of fields for Multi-Column Indices, or siply the name of one single field 
+		"""
 		#if indexTable not in self.indexes :
-		sql = "CREATE INDEX %s on %s(%s)" %(indexTable, table, field)
+		indexTable = self.makeIndexTableName(table, fields)
+		if type(fields) is types.ListType :
+			sql = "CREATE INDEX %s on %s(%s)" %(indexTable, table, ', '.join(fields))
+		else :
+			sql = "CREATE INDEX %s on %s(%s)" %(indexTable, table, fields)
 		try :
 			self.execute(sql)
 		except :
@@ -95,9 +117,9 @@ class RabaConnection(object) :
 		return True
 		#self.indexes.add(indexTable)
 
-	def dropIndex(self, table, field) :
+	def dropIndex(self, table, fields) :
 		"DROPs an index created by RabaDb see createIndexes()"
-		indexTable = self.makeIndexTableName(table, field)
+		indexTable = self.makeIndexTableName(table, fields)
 		sql = "DROP INDEX IF EXISTS %s" %(indexTable)
 		self.execute(sql)
 		#self.indexes.remove(indexTable)

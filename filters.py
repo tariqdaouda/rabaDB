@@ -5,7 +5,10 @@ from Raba import *
 import fields as RabaFields
 
 #####
-# Add arthmetic operations {'chro.x2 - chro.x1 >' : 10}
+# TODO
+#------
+# - Add COUNT (if field is rabalist return valeur de la case, else select count())
+# - Add arthmetic operations {'chro.x2 - chro.x1 >' : 10}
 #####
 
 #Usage:
@@ -63,7 +66,7 @@ class RabaQuery :
 		self.operators = set(['LIKE', '=', '<', '>', '=', '>=', '<=', '<>', '!=', 'IS'])
 		#self.artOperators = set(['+', '-', '*', '/', '%'])
 
-	def _parseArtOperators(self, k) :
+	def _parseAritOperators(self, k) :
 		#TODO
 		pass
 
@@ -99,11 +102,10 @@ class RabaQuery :
 				vv = v
 
 			if sk[0].find('.') > -1 :
-				joink, joinv = self._parseJoint(sk[0], operator, vv)
-				filts[joink] = joinv
-			else :
-				filts[kk] = vv
-
+				kk = self._parseJoint(sk[0], operator)
+			
+			filts[kk] = vv
+				
 		for lt in lstFilters :
 			for l in lt :
 				match = self.fieldPattern.match(l)
@@ -115,8 +117,8 @@ class RabaQuery :
 				value = match.group(4)
 
 				if field.find('.') > -1 :
-					joink, joinv = self._parseJoint(field, operator, value)
-					filts[joink] = joinv
+					joink = self._parseJoint(field, operator, value)
+					filts[joink] = value
 				else :
 					filts['%s.%s %s' %(self.rabaClass.__name__, field, operator)] = value
 
@@ -133,7 +135,7 @@ class RabaQuery :
 			raise ValueError("Can't perform joints accros namespaces. My namespace is: '%s', %s->%s's is: '%s'" % (self._raba_namespace, currClass.__name__, attr.className, attr.classNamespace))
 		return attr"""
 
-	def _parseJoint(self, strJoint, lastOperator, value) :
+	def _parseJoint(self, strJoint, lastOperator) :
 		fields = strJoint.split('.')
 		conditions = []
 
@@ -156,7 +158,7 @@ class RabaQuery :
 			conditions.append('%s.%s' %(attr.className, fields[-1]))
 
 		self.tables.add(attr.className)
-		return '%s %s' % (' AND '.join(conditions), lastOperator), value
+		return '%s %s' % (' AND '.join(conditions), lastOperator)
 
 	def getSQLQuery(self) :
 		"Returns the query without performing it"
@@ -164,9 +166,21 @@ class RabaQuery :
 		sqlValues = []
 		#print self.filters
 		for f in self.filters :
-			sqlFilters.append('(%s ?)' % ' ? AND '.join(f.keys()))
-			sqlValues.extend(f.values())
-
+			filt = []
+			for k, vv in f.iteritems() :
+				if type(vv) is types.ListType or type(vv) is types.TupleType :
+					sqlValues.extend(vv)
+					kk = 'OR %s ? '%k * len(vv)
+					kk = "(%s)" % kk[3:] #% (k, s.join(vv))
+				else :
+					sqlValues.append(vv)
+					kk = k
+				
+				filt.append(kk)	
+			
+			sqlFilters.append('(%s)' % ' ? AND '.join(filt))
+			
+		#print sqlFilters
 		sqlFilters =' OR '.join(sqlFilters)
 
 		if len(self.tables) < 2 :
@@ -198,7 +212,7 @@ class RabaQuery :
 			res.append(RabaPupa(self.rabaClass, v[0]))
 
 		return res
-
+	
 	def runSQL(self, sql) :
 		"Runs the query and returns the entire result"
 		cur = self.con.execute(sql)

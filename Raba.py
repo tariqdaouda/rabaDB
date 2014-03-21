@@ -407,33 +407,51 @@ class Raba(object):
 	def develop(self) :
 		"Dummy fct, so when you call develop on a full developed object you don't get nasty exceptions"
 		pass
-
+	
 	@classmethod
-	def requireIndex(cls, field) :
-		"add an index for field, indexes take place and slow down saves and deletes but they speed up a lot everything else. If you are going to do a lot of saves/deletes drop the indexes first re-add them afterwards"
+	def _parseIndex(cls, fields) :
 		con = RabaConnection(cls._raba_namespace)
-		if RabaFields.isRabaListField(getattr(cls, field)) :
-			name = con.makeRabaListTableName(cls.__name__, field)
-			ffield = 'anchor_raba_id'
+		ff = []
+		rlf = []
+		tmpf = []
+		if type(fields) is types.StringType :
+			tmpf.append(fields)
 		else :
-			name = cls.__name__
-			ffield = field
-
-		con.createIndex(name, ffield)
+			tmpf = fields
+			
+		for field in tmpf :		
+			if RabaFields.isRabaListField(getattr(cls, field)) :
+				lname = con.makeRabaListTableName(cls.__name__, field)
+				rlf.append(lname, )
+			else :
+				ff.append(field)
+		
+		return rlf, ff
+		
+	@classmethod
+	def requireIndex(cls, fields) :
+		"""Add an index for field, indexes take place and slow down saves and deletes but they speed up a lot everything else. If you are going to do a lot of saves/deletes drop the indexes first re-add them afterwards
+		Fields can be a list of fields for Multi-Column Indices or simply the name of a single field. But as RabaList are basicaly in separate tables you cannot create a multicolumn indice on them. A single index will
+		be create for the RabaList alone"""
+		con = RabaConnection(cls._raba_namespace)
+		rlf, ff = cls._parseIndex(fields)
+		
+		for name in rlf :
+			con.createIndex(name, 'anchor_raba_id')
+		
+		con.createIndex(cls.__name__, ff)
 		con.commit()
 
 	@classmethod
-	def dropIndex(cls, field) :
-		"remove the indexation for field"
+	def dropIndex(cls, fields) :
+		"removes an index created with requireIndex "
 		con = RabaConnection(cls._raba_namespace)
-		if RabaFields.isRabaListField(getattr(cls, field)) :
-			name = con.makeRabaListTableName(cls.__name__, field)
-			ffield = 'anchor_raba_id'
-		else :
-			name = cls.__name__
-			ffield = field
-
-		con.dropIndex(name, ffield)
+		rlf, ff = cls._parseIndex(fields)
+		
+		for name in rlf :
+			con.dropIndex(name, 'anchor_raba_id')
+		
+		con.dropIndex(cls.__name__, ff)
 		con.commit()
 
 	def mutated(self) :
