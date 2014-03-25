@@ -178,7 +178,7 @@ class RabaQuery :
 				
 				filt.append(kk)	
 			
-			sqlFilters.append('(%s)' % ' ? AND '.join(filt))
+			sqlFilters.append('(%s ?)' % ' ? AND '.join(filt))
 			
 		#print sqlFilters
 		sqlFilters =' OR '.join(sqlFilters)
