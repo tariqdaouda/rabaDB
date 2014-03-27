@@ -1,6 +1,6 @@
 import re, types
 
-from setup import RabaConnection, RabaConfiguration
+import setup as stp
 from Raba import *
 import fields as RabaFields
 
@@ -51,13 +51,13 @@ class RabaQuery :
 
 		if type(rabaClass) is types.StringType :
 			self._raba_namespace = namespace
-			self.con = RabaConnection(self._raba_namespace)
+			self.con = stp.RabaConnection(self._raba_namespace)
 			self.rabaClass = self.con.getClass(rabaClass)
 		else :
 			self.rabaClass = rabaClass
 			self._raba_namespace = self.rabaClass._raba_namespace
 
-		self.con = RabaConnection(self._raba_namespace)
+		self.con = stp.RabaConnection(self._raba_namespace)
 		self.filters = []
 		self.tables = set()
 
@@ -124,17 +124,6 @@ class RabaQuery :
 
 		self.filters.append(filts)
 
-	"""def testRabaClassAttribute(self, currClass, field) :
-		attr = getattr(currClass, field)
-		print attr, field
-		assert RabaFields.isRabaObjectField(attr)
-		if attr.className == None :
-			raise ValueError('Attribute %s has no mandatory RabaClass' % field)
-
-		if attr.classNamespace != None and attr.classNamespace != self._raba_namespace :
-			raise ValueError("Can't perform joints accros namespaces. My namespace is: '%s', %s->%s's is: '%s'" % (self._raba_namespace, currClass.__name__, attr.className, attr.classNamespace))
-		return attr"""
-
 	def _parseJoint(self, strJoint, lastOperator) :
 		fields = strJoint.split('.')
 		conditions = []
@@ -160,8 +149,8 @@ class RabaQuery :
 		self.tables.add(attr.className)
 		return '%s %s' % (' AND '.join(conditions), lastOperator)
 
-	def getSQLQuery(self) :
-		"Returns the query without performing it"
+	def getSQLQuery(self, count = False) :
+		"Returns the query without performing it, If count, then the query wil be SELECT COUNT() instead of a SELECT"
 		sqlFilters = []
 		sqlValues = []
 		#print self.filters
@@ -171,25 +160,30 @@ class RabaQuery :
 				if type(vv) is types.ListType or type(vv) is types.TupleType :
 					sqlValues.extend(vv)
 					kk = 'OR %s ? '%k * len(vv)
-					kk = "(%s)" % kk[3:] #% (k, s.join(vv))
+					kk = "(%s)" % kk[3:]
 				else :
-					sqlValues.append(vv)
 					kk = k
-				
+				sqlValues.append(vv)
 				filt.append(kk)	
 			
 			sqlFilters.append('(%s ?)' % ' ? AND '.join(filt))
-			
-		#print sqlFilters
+		
+		if len(sqlValues) > stp.SQLITE_LIMIT_VARIABLE_NUMBER :
+			raise ValueError("""The limit number of parameters imposed by sqlite is %s.
+You will have to break your query into several smaller one. Sorry about that. (actual number of parameters is: %s)""" % (stp.SQLITE_LIMIT_VARIABLE_NUMBER, len(sqlValues)))
+		
 		sqlFilters =' OR '.join(sqlFilters)
-
+		
 		if len(self.tables) < 2 :
 			tablesStr = self.rabaClass.__name__
 		else :
 			tablesStr =  ', '.join(self.tables)
-
-		sql = 'SELECT %s.raba_id FROM %s WHERE %s' % (self.rabaClass.__name__, tablesStr, sqlFilters)
-
+		
+		if count :
+			sql = 'SELECT COUNT(*) FROM %s WHERE %s' % (self.rabaClass.__name__, tablesStr, sqlFilters)
+		else :
+			sql = 'SELECT %s.raba_id FROM %s WHERE %s' % (self.rabaClass.__name__, tablesStr, sqlFilters)
+		
 		return (sql, sqlValues)
 
 	def iterRun(self, sqlTail = '') :
@@ -213,8 +207,13 @@ class RabaQuery :
 
 		return res
 	
+	def count(self, sqlTail = '') :
+		"Compile filters and counts the number of results. You can use sqlTail to add things such as order by"
+		sql, sqlValues = self.getSQLQuery()
+		return int(self.con.execute('%s %s'% (sql, sqlTail), sqlValues).fetchone()[0])
+		
 	def runSQL(self, sql) :
-		"Runs the query and returns the entire result"
+		"Run an sql query thtat must start with SELECT <raba type>.raba_id, and reurns a list of results"
 		cur = self.con.execute(sql)
 		res = []
 		for v in cur :
@@ -223,7 +222,7 @@ class RabaQuery :
 		return res
 
 	def iterRunSQL(self, sql) :
-		"Runs the query and returns an iterator"
+		"Run an sql query thtat must start with SELECT <raba type>.raba_id"
 		cur = self.con.execute(sql)
 
 		for v in cur :
@@ -232,7 +231,7 @@ class RabaQuery :
 
 if __name__ == '__main__' :
 	#import unittest
-	RabaConfiguration('test', './dbTest_filters.db')
+	stp.RabaConfiguration('test', './dbTest_filters.db')
 
 	class A(Raba) :
 		_raba_namespace = 'test'

@@ -1,9 +1,8 @@
-import time, types
-import time, types
+import time, types, hashlib, sys
 import sqlite3 as sq
 
-#If set to True will print all sql commands and other goodies. Will also some checkings
-_DEBUG_MODE = False
+#The limit number of variables in a query in sqlite (http://www.sqlite.org/limits.html). Same name as in sqlite if want to google it
+SQLITE_LIMIT_VARIABLE_NUMBER = 999
 
 class RabaNameSpaceSingleton(type):
 	_instances = {}
@@ -61,11 +60,8 @@ class RabaConnection(object) :
 		sql = "SELECT name, type FROM sqlite_master WHERE type='table'"
 		cur = self.execute(sql)
 		self.tables = set()
-		#self.indexes = set()
 		for n in cur :
 			self.tables.add(n[0])
-		#	elif n[1] == 'index' :
-		#		self.indexes.add(n[0])
 
 		if not self.tableExits('raba_tables_constraints') :
 			sql = "CREATE TABLE raba_tables_constraints (table_name NOT NULL, constraints, PRIMARY KEY(table_name))"
@@ -77,52 +73,78 @@ class RabaConnection(object) :
 	def getTables(self) :
 		"return a set of all tables"
 		return self.tables
-	
-	def getIndices(self) :
-		"returns a list of all indices"
-		sql = "SELECT name, type FROM sqlite_master WHERE type='index'"
+
+	def getIndexes(self, rabaOnly = True) :
+		"returns a list of all indexes in the sql database. rabaOnly returns only the indexes created by raba"
+		sql = "SELECT * FROM sqlite_master WHERE type='index'"
 		cur = self.execute(sql)
 		l = []
 		for n in cur :
-			l.append(n[0])
-		
-		return l
-	
-	def purgeIndices(self) :
-		"drops all indices created by Raba"
-		for n in self.listIndices() :
-			if n.find('raba') == 0 :
-				self.dropTable(n)
-		
-	def makeIndexTableName(self, table, fields) :
-		if type(fields) is types.ListType :
-			return "raba_%s_index_on_%s" %(table, '_x_'.join(fields))
-		else :
-			return "raba_%s_index_on_%s" %(table, fields)
-		
-	def createIndex(self, table, fields) :
-		"""Creates indexes for Raba Class a fields resulting in significantly faster SELECTs but potentially slower UPADTES/INSERTS and a bigger DBs
-		Fields can be a list of fields for Multi-Column Indices, or siply the name of one single field 
-		"""
-		#if indexTable not in self.indexes :
-		indexTable = self.makeIndexTableName(table, fields)
-		if type(fields) is types.ListType :
-			sql = "CREATE INDEX %s on %s(%s)" %(indexTable, table, ', '.join(fields))
-		else :
-			sql = "CREATE INDEX %s on %s(%s)" %(indexTable, table, fields)
-		try :
-			self.execute(sql)
-		except :
-			return False
-		return True
-		#self.indexes.add(indexTable)
+			if rabaOnly :
+				if n[1].lower().find('raba') == 0 :
+					l.append(n)
+			else :
+				l.append(n)
 
-	def dropIndex(self, table, fields) :
+		return l
+
+	def flushIndexes(self) :
+		"drops all indexes created by Raba"
+		for n in self.getIndexes() :
+			if n[1].lower().find('raba') == 0 :
+				self.dropIndexByName(n[1])
+
+	def makeIndexTableName(self, table, fields, where = '', whereValues = []) :
+		if where != '':
+			typ = "PARTIAL_INDEX"
+			w = hashlib.md5("%s%s" %(where, whereValues)).hexdigest()
+		else :
+			typ = "INDEX"
+			w = ''
+
+		if type(fields) is types.ListType :
+			return "RABA_%s_%s_%s_on_%s" %(table, typ, w, '_X_'.join(fields))
+		else :
+			return "RABA_%s_%s_%s_on_%s" %(table, typ, w, fields)
+
+	def createIndex(self, table, fields, where = '', whereValues = []) :
+		"""Creates indexes for Raba Class a fields resulting in significantly faster SELECTs but potentially slower UPADTES/INSERTS and a bigger DBs
+		Fields can be a list of fields for Multi-Column Indices, or siply the name of one single field.
+		With the where close you can create a partial index by adding conditions
+		-----
+		only for sqlite 3.8.0+
+		where : optional ex: name = ? AND hair_color = ?
+		whereValues : optional, ex: ["britney", 'black']
+		"""
+		versioTest = sq.sqlite_version_info[0] >= 3 and sq.sqlite_version_info[1] >= 8
+		if len(where) > 0 and not versioTest :
+				#raise FutureWarning("Partial joints (with the WHERE clause) where only implemented in sqlite 3.8.0+, your version is: %s. Sorry about that." % sq.sqlite_version)
+				sys.stderr.write("WARNING: IGNORING THE \"WHERE\" CLAUSE. Partial joints where only implemented in sqlite 3.8.0+, your version is: %s. Sorry about that.\n" % sq.sqlite_version)
+				indexTable = self.makeIndexTableName(table, fields)
+		else :
+			indexTable = self.makeIndexTableName(table, fields, where, whereValues)
+
+		if type(fields) is types.ListType :
+			sql = "CREATE INDEX IF NOT EXISTS %s on %s(%s)" %(indexTable, table, ', '.join(fields))
+		else :
+			sql = "CREATE INDEX IF NOT EXISTS %s on %s(%s)" %(indexTable, table, fields)
+
+		if len(where) > 0 and versioTest:
+			sql = "%s WHERE %s;" % (sql, where)
+			self.execute(sql, whereValues)
+		else :
+			self.execute(sql)
+
+	def dropIndex(self, table, fields, where = '') :
 		"DROPs an index created by RabaDb see createIndexes()"
-		indexTable = self.makeIndexTableName(table, fields)
-		sql = "DROP INDEX IF EXISTS %s" %(indexTable)
+		indexTable = self.makeIndexTableName(table, fields, where)
+		self.dropIndexByName(indexTable)
+
+	def dropIndexByName(self, name) :
+		"drop an index. If you actially the name of the index table you want to get rid of, you can use this fucntion instead of dropIndex()"
+		print '---', name
+		sql = "DROP INDEX IF EXISTS %s" % name
 		self.execute(sql)
-		#self.indexes.remove(indexTable)
 
 	def eraseStats(self) :
 		self.queryLogs = {'INSERT' : [], 'SELECT' : [], 'UPDATE' : [], 'DELETE' : [], 'DROP' : [], 'PRAGMA' : [],'CREATE' : []}
@@ -179,7 +201,7 @@ class RabaConnection(object) :
 
 	def _debugActions(self, sql, values) :
 		if self._debugSQL :
-			print "run: %s %s ?\n(c)ontinue/(s)top:" % (sql, values)
+			print "Next query: %s\nWith params: %s\n(c)ontinue/(s)top:" % (sql, values)
 			while True :
 				val = raw_input().lower()
 				if val == 's' :

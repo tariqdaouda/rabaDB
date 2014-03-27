@@ -407,7 +407,7 @@ class Raba(object):
 	def develop(self) :
 		"Dummy fct, so when you call develop on a full developed object you don't get nasty exceptions"
 		pass
-	
+
 	@classmethod
 	def _parseIndex(cls, fields) :
 		con = RabaConnection(cls._raba_namespace)
@@ -418,40 +418,60 @@ class Raba(object):
 			tmpf.append(fields)
 		else :
 			tmpf = fields
-			
-		for field in tmpf :		
+
+		for field in tmpf :
 			if RabaFields.isRabaListField(getattr(cls, field)) :
 				lname = con.makeRabaListTableName(cls.__name__, field)
 				rlf.append(lname, )
 			else :
 				ff.append(field)
-		
+
 		return rlf, ff
-		
+
 	@classmethod
-	def requireIndex(cls, fields) :
+	def ensureIndex(cls, fields, where = '', whereValues = []) :
 		"""Add an index for field, indexes take place and slow down saves and deletes but they speed up a lot everything else. If you are going to do a lot of saves/deletes drop the indexes first re-add them afterwards
 		Fields can be a list of fields for Multi-Column Indices or simply the name of a single field. But as RabaList are basicaly in separate tables you cannot create a multicolumn indice on them. A single index will
-		be create for the RabaList alone"""
+		be create for the RabaList alone
+		-----
+		only for sqlite 3.8.0+
+		where : optional ex: name = ? AND hair_color = ?
+		whereValues : optional, ex: ["britney", 'black']
+		"""
 		con = RabaConnection(cls._raba_namespace)
 		rlf, ff = cls._parseIndex(fields)
-		
+
+		wv = []
+		for w in whereValues :
+			if isRabaObject(w) :
+				wv.append(w.getJsonEncoding())
+			else :
+				wv.append(w)
+
 		for name in rlf :
 			con.createIndex(name, 'anchor_raba_id')
-		
-		con.createIndex(cls.__name__, ff)
+
+		con.createIndex(cls.__name__, ff, 'name = UI')
+		#con.createIndex(cls.__name__, ff, where, wv)
 		con.commit()
 
 	@classmethod
-	def dropIndex(cls, fields) :
-		"removes an index created with requireIndex "
+	def dropIndex(cls, fields, where = '', whereValues = []) :
+		"removes an index created with ensureIndex "
 		con = RabaConnection(cls._raba_namespace)
 		rlf, ff = cls._parseIndex(fields)
-		
+
+		wv = []
+		for w in whereValues :
+			if isRabaObject(w) :
+				wv.append(w.getJsonEncoding())
+			else :
+				w.append(w)
+
 		for name in rlf :
 			con.dropIndex(name, 'anchor_raba_id')
-		
-		con.dropIndex(cls.__name__, ff)
+
+		con.dropIndex(cls.__name__, ff, where, wv)
 		con.commit()
 
 	def mutated(self) :
