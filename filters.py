@@ -46,8 +46,8 @@ class RabaQuery :
 		self.reset(rabaClass, namespace)
 
 	def reset(self, rabaClass, namespace = None) :
-		"""rabaClass can either be raba class of a string of a raba class name. In the latter case you must provide the namespace argument.
-		If it's a Raba Class the argument is ignored. If you fear cicular importants use strings"""
+		"""rabaClass can either be a raba class of a string of a raba class name. In the latter case you must provide the namespace argument.
+		If it's a Raba Class the argument is ignored. If you fear cicular imports use strings"""
 
 		if type(rabaClass) is types.StringType :
 			self._raba_namespace = namespace
@@ -180,7 +180,7 @@ You will have to break your query into several smaller one. Sorry about that. (a
 			tablesStr =  ', '.join(self.tables)
 		
 		if count :
-			sql = 'SELECT COUNT(*) FROM %s WHERE %s' % (self.rabaClass.__name__, tablesStr, sqlFilters)
+			sql = 'SELECT COUNT(*) FROM %s WHERE %s' % (tablesStr, sqlFilters)
 		else :
 			sql = 'SELECT %s.raba_id FROM %s WHERE %s' % (self.rabaClass.__name__, tablesStr, sqlFilters)
 		
@@ -192,7 +192,6 @@ You will have to break your query into several smaller one. Sorry about that. (a
 
 		sql, sqlValues = self.getSQLQuery()
 		cur = self.con.execute('%s %s'% (sql, sqlTail), sqlValues)
-
 		for v in cur :
 			yield RabaPupa(self.rabaClass, v[0])
 
@@ -204,27 +203,30 @@ You will have to break your query into several smaller one. Sorry about that. (a
 		res = []
 		for v in cur :
 			res.append(RabaPupa(self.rabaClass, v[0]))
-
+		
 		return res
 	
 	def count(self, sqlTail = '') :
 		"Compile filters and counts the number of results. You can use sqlTail to add things such as order by"
-		sql, sqlValues = self.getSQLQuery()
+		sql, sqlValues = self.getSQLQuery(count = True)
 		return int(self.con.execute('%s %s'% (sql, sqlTail), sqlValues).fetchone()[0])
 		
-	def runSQL(self, sql) :
-		"Run an sql query thtat must start with SELECT <raba type>.raba_id, and reurns a list of results"
-		cur = self.con.execute(sql)
+	def runWhere(self, where, params = (), rawVal = False) :
+		"Let's you define your own where clause. ex : where = 'id = ?' params = (355)"
+		sql = "SELECT %s.raba_id FROM %s WHERE %s" % (self.rabaClass.__name__, self.rabaClass.__name__, where)
+		cur = self.con.execute(sql, params)
 		res = []
 		for v in cur :
-			res.append(RabaPupa(self.rabaClass, v[0]))
-
+			if not rawVal :
+				res.append(RabaPupa(self.rabaClass, v[0]))
+			else :
+				return v
 		return res
 
 	def iterRunSQL(self, sql) :
-		"Run an sql query thtat must start with SELECT <raba type>.raba_id"
+		"Run an sql query that must start with SELECT <raba type>.raba_id"
 		cur = self.con.execute(sql)
-
+		
 		for v in cur :
 			yield RabaPupa(self.rabaClass, v[0])
 

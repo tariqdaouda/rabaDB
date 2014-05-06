@@ -160,7 +160,6 @@ class _RabaSingleton_MetaClass(type) :
 
 				sqlCons = 'INSERT INTO raba_tables_constraints (table_name, constraints) VALUES (?, ?)'
 				con.execute(sqlCons, (name, uniqueStr))
-				#con.commit()
 			else :
 				sql = 'SELECT constraints FROM raba_tables_constraints WHERE table_name = ?'
 
@@ -205,8 +204,6 @@ class _RabaSingleton_MetaClass(type) :
 				if mustClean or mustAlter :
 					con.forceCommit()
 
-			#dct['raba_id'] = RabaFields.Primitive()
-			#dct['json'] = RabaFields.Primitive()
 			dct['columns'] = columns
 			dct['columnsToLowerCase'] = columnsToLowerCase
 
@@ -223,7 +220,6 @@ class _RabaSingleton_MetaClass(type) :
 		if 'raba_id' in fieldsDct :
 			key = makeRabaObjectSingletonKey(cls.__name__, cls._raba_namespace, fieldsDct['raba_id'])
 			if key in cls._instances :
-				print "sssyyyyyyyyyyyyys"
 				return cls._instances[key]
 		else :
 			key = None
@@ -368,13 +364,18 @@ class Raba(object):
 					objClass = RabaConnection(val["raba_namespace"]).getClass(val["className"])
 					self.__setattr__(k, RabaPupa(objClass, val["raba_id"]))
 			elif RabaFields.isRabaListField(elmt) :
-				lists.append((k, int(dbLine[i])))
+				if dbLine[i] == None :
+					lists.append((k, 0))
+				else :
+					lists.append((k, int(dbLine[i])))
 			else :
 				raise ValueError("Unable to set field %s to %s in Raba object %s" %(k, dbLine[i], self._rabaClass.__name__))
 
+		self.rabaLists = []
 		for k, leng in lists :
 			rlp = RabaListPupa(anchorObj = self, relationName = k, length = leng)
 			self.__setattr__(k, rlp)
+			self.rabaLists.append(rlp)
 
 	def _raba__init__(self, **fieldsSet) :
 
@@ -399,7 +400,7 @@ class Raba(object):
 
 		if self.raba_id == None :
 			self.raba_id = self.connection.getNextRabaId(self)
-
+		
 	def pupa(self) :
 		"""returns a pupa version of self"""
 		return RabaPupa(self.__class__, self.raba_id)
@@ -407,7 +408,7 @@ class Raba(object):
 	def develop(self) :
 		"Dummy fct, so when you call develop on a full developed object you don't get nasty exceptions"
 		pass
-
+	
 	@classmethod
 	def _parseIndex(cls, fields) :
 		con = RabaConnection(cls._raba_namespace)
@@ -418,61 +419,67 @@ class Raba(object):
 			tmpf.append(fields)
 		else :
 			tmpf = fields
-
-		for field in tmpf :
+			
+		for field in tmpf :	
 			if RabaFields.isRabaListField(getattr(cls, field)) :
 				lname = con.makeRabaListTableName(cls.__name__, field)
 				rlf.append(lname, )
 			else :
 				ff.append(field)
-
+		
 		return rlf, ff
-
+		
 	@classmethod
 	def ensureIndex(cls, fields, where = '', whereValues = []) :
 		"""Add an index for field, indexes take place and slow down saves and deletes but they speed up a lot everything else. If you are going to do a lot of saves/deletes drop the indexes first re-add them afterwards
 		Fields can be a list of fields for Multi-Column Indices or simply the name of a single field. But as RabaList are basicaly in separate tables you cannot create a multicolumn indice on them. A single index will
-		be create for the RabaList alone
-		-----
-		only for sqlite 3.8.0+
-		where : optional ex: name = ? AND hair_color = ?
-		whereValues : optional, ex: ["britney", 'black']
-		"""
+		be create for the RabaList alone"""
 		con = RabaConnection(cls._raba_namespace)
 		rlf, ff = cls._parseIndex(fields)
-
-		wv = []
-		for w in whereValues :
-			if isRabaObject(w) :
-				wv.append(w.getJsonEncoding())
-			else :
-				wv.append(w)
+		ww = []
+		for i in range(len(whereValues)) :
+			if isRabaObject(whereValues[i]) :
+				ww.append(whereValues[i].getJsonEncoding())
 
 		for name in rlf :
 			con.createIndex(name, 'anchor_raba_id')
-
-		con.createIndex(cls.__name__, ff, 'name = UI')
-		#con.createIndex(cls.__name__, ff, where, wv)
+		
+		if len(ff) > 0 :
+			con.createIndex(cls.__name__, ff, where = where, whereValues = ww)
 		con.commit()
 
 	@classmethod
-	def dropIndex(cls, fields, where = '', whereValues = []) :
+	def dropIndex(cls, fields) :
 		"removes an index created with ensureIndex "
 		con = RabaConnection(cls._raba_namespace)
 		rlf, ff = cls._parseIndex(fields)
-
-		wv = []
-		for w in whereValues :
-			if isRabaObject(w) :
-				wv.append(w.getJsonEncoding())
-			else :
-				w.append(w)
-
+		
 		for name in rlf :
 			con.dropIndex(name, 'anchor_raba_id')
-
-		con.dropIndex(cls.__name__, ff, where, wv)
+		
+		con.dropIndex(cls.__name__, ff)
 		con.commit()
+	
+	@classmethod
+	def getIndexes(cls) :
+		"returns a list of the indexes of a class"
+		con = RabaConnection(cls._raba_namespace)
+		idxs = []
+		for idx in con.getIndexes(rabaOnly = True) :
+			if idx[2] == cls.__name__ :
+				idxs.append(idx)
+			else :
+				for k in cls.columns :
+					if RabaFields.isRabaListField(getattr(cls, k)) and idx[2] == con.makeRabaListTableName(cls.__name__, k) :
+						idxs.append(idx)
+		return idxs
+	
+	@classmethod
+	def flushIndexes(cls) :
+		"drops all indexes for a class"
+		con = RabaConnection(cls._raba_namespace)
+		for idx in cls.getIndexes() :
+			con.dropIndexByName(idx[1])
 
 	def mutated(self) :
 		'returns True if the object has changed since the last save'
@@ -480,6 +487,9 @@ class Raba(object):
 
 	def save(self) :
 		if self.mutated() :
+			if not self.raba_id :
+				raise ValueError("Field raba_id of self has the not int value %s therefore i cannot save the object, sorry" % (self, self.raba_id))
+			
 			for k, v in self.listsToSave.iteritems() :
 				v._save()
 				self.sqlSave[k] = len(v)
@@ -590,14 +600,17 @@ class Raba(object):
 		return "<Raba obj: %s, raba_id: %s>" % (self._runtimeId, self.raba_id)
 
 	@classmethod
+	def getFields(cls) :
+		"""returns a set of the available fields. In order to be able ti securely loop of the fields, "raba_id" and "json" are not included in the set"""
+		s = set(cls.columns.keys())
+		s.remove('json')
+		s.remove('raba_id')
+		return s
+	
+	@classmethod
 	def help(cls) :
-		"returns a string of parameters"
-		fil = []
-		for k, v in cls.__dict__.items() :
-			if RabaFields.isField(v) :
-				fil.append(k)
-
-		return 'Available fields for %s: %s' %(cls.__name__, ', '.join(fil))
+		"returns a string of lisinting available fields"
+		return 'Available fields for %s: %s' %(cls.__name__, ', '.join(cls.getFields()))
 
 class RabaListPupa(MutableSequence) :
 
@@ -614,13 +627,6 @@ class RabaListPupa(MutableSequence) :
 		self.connection = RabaConnection(self._raba_namespace)
 
 		self.tableName = self.connection.makeRabaListTableName(self.anchorObj._rabaClass.__name__, self.relationName)
-		#if self.connection.createRabaListTable(self.tableName) == None : # table exists
-		#	sql = 'SELECT %s from %s WHERE raba_id = ?' %(self.relationName, self.anchorObj._rabaClass.__name__)
-		#	res = self.connection.execute(sql, (self.anchorObj.raba_id,)).fetchone()
-		#	if res != None :
-		#		self.length = res[0]
-		#else :
-		#	self.length = 0
 
 	def develop(self) :
 		MutableSequence.__setattr__(self, '__class__', RabaList)

@@ -47,7 +47,6 @@ class RabaConnection(object) :
 
 		self.connection = sq.connect(RabaConfiguration(namespace).dbFile)
 		self.namespace = namespace
-		#self.setReadOnly(readOnly)
 		self.loadedRabaClasses = {}
 		self.saveIniator = None
 		self.savedObject = set()
@@ -85,14 +84,12 @@ class RabaConnection(object) :
 					l.append(n)
 			else :
 				l.append(n)
-
 		return l
 
 	def flushIndexes(self) :
 		"drops all indexes created by Raba"
-		for n in self.getIndexes() :
-			if n[1].lower().find('raba') == 0 :
-				self.dropIndexByName(n[1])
+		for n in self.getIndexes(rabaOnly = True) :
+			self.dropIndexByName(n[1])
 
 	def makeIndexTableName(self, table, fields, where = '', whereValues = []) :
 		if where != '':
@@ -119,7 +116,7 @@ class RabaConnection(object) :
 		versioTest = sq.sqlite_version_info[0] >= 3 and sq.sqlite_version_info[1] >= 8
 		if len(where) > 0 and not versioTest :
 				#raise FutureWarning("Partial joints (with the WHERE clause) where only implemented in sqlite 3.8.0+, your version is: %s. Sorry about that." % sq.sqlite_version)
-				sys.stderr.write("WARNING: IGNORING THE \"WHERE\" CLAUSE. Partial joints where only implemented in sqlite 3.8.0+, your version is: %s. Sorry about that.\n" % sq.sqlite_version)
+				sys.stderr.write("WARNING: IGNORING THE \"WHERE\" CLAUSE in INDEX. Partial indexes where only implemented in sqlite 3.8.0+, your version is: %s. Sorry about that.\n" % sq.sqlite_version)
 				indexTable = self.makeIndexTableName(table, fields)
 		else :
 			indexTable = self.makeIndexTableName(table, fields, where, whereValues)
@@ -142,13 +139,12 @@ class RabaConnection(object) :
 
 	def dropIndexByName(self, name) :
 		"drop an index. If you actially the name of the index table you want to get rid of, you can use this fucntion instead of dropIndex()"
-		print '---', name
 		sql = "DROP INDEX IF EXISTS %s" % name
 		self.execute(sql)
 
 	def eraseStats(self) :
-		self.queryLogs = {'INSERT' : [], 'SELECT' : [], 'UPDATE' : [], 'DELETE' : [], 'DROP' : [], 'PRAGMA' : [],'CREATE' : []}
-		self.queryCounts = {'INSERT' : 0, 'SELECT' : 0, 'UPDATE' : 0, 'DELETE' : 0, 'DROP' : 0, 'PRAGMA' : 0,'CREATE' : 0, 'TOTAL': 0}
+		self.queryLogs = {'INSERT' : [], 'SELECT' : [], 'UPDATE' : [], 'DELETE' : [], 'DROP' : [], 'PRAGMA' : [],'CREATE' : [], 'ALTER' : []}
+		self.queryCounts = {'INSERT' : 0, 'SELECT' : 0, 'UPDATE' : 0, 'DELETE' : 0, 'DROP' : 0, 'PRAGMA' : 0,'CREATE' : 0, 'ALTER' : 0, 'TOTAL': 0}
 
 	def enableStats(self, bol, logQueries = False) :
 		"If bol == True, Raba will keep a count of every query time performed, logQueries == True it will also keep a record of all the queries "
@@ -179,6 +175,8 @@ class RabaConnection(object) :
 				k = 'PRAGMA'
 			elif sql[0].upper() == 'C' :
 				k = 'CREATE'
+			elif sql[0].upper() == 'A' :
+				k = 'ALTER'
 			elif sql[0].upper() == 'D' :
 				if sql[1].upper() == 'E' :
 					k = 'DELETE'
