@@ -503,8 +503,10 @@ class Raba(object):
 			if not self._saved :
 				sql = 'INSERT INTO %s (%s) VALUES (%s)' % (self.__class__.__name__, ', '.join(self.sqlSave.keys()), ', '.join(self.sqlSaveQMarks.values()))
 			else :
+				del(self.sqlSave['raba_id'])
 				sql = 'UPDATE %s SET %s = ? WHERE raba_id = ?' % (self.__class__.__name__, ' = ?, '.join(self.sqlSave.keys()))
-
+				self.sqlSave['raba_id'] = self.raba_id
+				
 			self.connection.execute(sql, self.sqlSave.values())
 			self.connection.commit()
 			self._saved = True
@@ -539,10 +541,11 @@ class Raba(object):
 			setattr(self, k, v)
 
 	def __setattr__(self, k, v) :
+		"This also keeps track of wich fields have been updated."
 		vv = v
 		if hasattr(self.__class__, k) and RabaFields.isField(getattr(self.__class__, k)) :
 			vSQL = None
-			if not RabaFields.isRabaListField(getattr(self.__class__, k)) :
+			if not RabaFields.isRabaListField(getattr(self.__class__, k)) :		
 				classType = getattr(self.__class__, k)
 				if not classType.check(vv) :
 					raise ValueError("Unable to set '%s' to value '%s'. Constrain function violation" % (k, vv))

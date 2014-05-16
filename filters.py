@@ -186,23 +186,32 @@ You will have to break your query into several smaller one. Sorry about that. (a
 		
 		return (sql, sqlValues)
 
-	def iterRun(self, sqlTail = '') :
-		"""Compile filters and run the query and returns an iterator. This much more efficient for large sets of data but
-		yyou get results one by one. You can use sqlTail to add things such as order by"""
+	def iterRun(self, sqlTail = '', raw = False) :
+		"""Compile filters and run the query and returns an iterator. This much more efficient for large data sets but
+		you get the results one element at a time. One thing to keep in mind is that this function keeps the cursor open, that means that the sqlite databae is locked (no updates/inserts etc...) until all
+		the elements have been fetched. For batch updates to the database, preload the results into a list using get, then do you updates.
+		You can use sqlTail to add things such as order by
+		If raw, returns the raw tuple data (not wrapped into a raba object)"""
 
 		sql, sqlValues = self.getSQLQuery()
 		cur = self.con.execute('%s %s'% (sql, sqlTail), sqlValues)
 		for v in cur :
-			yield RabaPupa(self.rabaClass, v[0])
-
-	def run(self, sqlTail = '') :
-		"Compile filters and run the query and returns the entire result. You can use sqlTail to add things such as order by"
+			if not raw :
+				yield RabaPupa(self.rabaClass, v[0])
+			else :
+				yield v
+			
+	def run(self, sqlTail = '', raw = False) :
+		"""Compile filters and run the query and returns the entire result. You can use sqlTail to add things such as order by. If raw, returns the raw tuple data (not wrapped into a raba object)"""
 		sql, sqlValues = self.getSQLQuery()
 		cur = self.con.execute('%s %s'% (sql, sqlTail), sqlValues)
 
 		res = []
 		for v in cur :
-			res.append(RabaPupa(self.rabaClass, v[0]))
+			if not raw :
+				res.append(RabaPupa(self.rabaClass, v[0]))
+			else :
+				return v
 		
 		return res
 	
@@ -211,24 +220,33 @@ You will have to break your query into several smaller one. Sorry about that. (a
 		sql, sqlValues = self.getSQLQuery(count = True)
 		return int(self.con.execute('%s %s'% (sql, sqlTail), sqlValues).fetchone()[0])
 		
-	def runWhere(self, where, params = (), rawVal = False) :
-		"Let's you define your own where clause. ex : where = 'id = ?' params = (355)"
-		sql = "SELECT %s.raba_id FROM %s WHERE %s" % (self.rabaClass.__name__, self.rabaClass.__name__, where)
+	def runWhere(self, whereAndTail, params = (), raw = False) :
+		"""You get to write your own where + tail clauses. If raw, returns the raw tuple data (not wrapped into a raba object).If raw, returns the raw tuple data (not wrapped into a raba object)"""
+		
+		sql = "SELECT %s.raba_id FROM %s whereAndTail %s" % (self.rabaClass.__name__, self.rabaClass.__name__, whereAndTail)
 		cur = self.con.execute(sql, params)
 		res = []
 		for v in cur :
-			if not rawVal :
+			if not raw :
 				res.append(RabaPupa(self.rabaClass, v[0]))
 			else :
 				return v
 		return res
 
-	def iterRunSQL(self, sql) :
-		"Run an sql query that must start with SELECT <raba type>.raba_id"
-		cur = self.con.execute(sql)
+	def iterRunWhere(self, whereAndTail, params = (), raw = False) :
+		"""You get to write your own where + tail clauses. If raw, returns the raw tuple data (not wrapped into a raba object).If raw, returns the raw tuple data (not wrapped into a raba object).
+		For more info see iterGet()
+		"""
 		
+		sql = "SELECT %s.raba_id FROM %s whereAndTail %s" % (self.rabaClass.__name__, self.rabaClass.__name__, whereAndTail)
+		cur = self.con.execute(sql, params)
+		res = []
 		for v in cur :
-			yield RabaPupa(self.rabaClass, v[0])
+			if not raw :
+				yield RabaPupa(self.rabaClass, v[0])
+			else :
+				yield v
+		return res
 
 
 if __name__ == '__main__' :
