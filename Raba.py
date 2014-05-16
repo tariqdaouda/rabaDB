@@ -501,13 +501,15 @@ class Raba(object):
 				self.sqlSaveQMarks['json'] = '?'
 
 			if not self._saved :
+				values = self.sqlSave.values()
 				sql = 'INSERT INTO %s (%s) VALUES (%s)' % (self.__class__.__name__, ', '.join(self.sqlSave.keys()), ', '.join(self.sqlSaveQMarks.values()))
 			else :
 				del(self.sqlSave['raba_id'])
+				values = self.sqlSave.values()
 				sql = 'UPDATE %s SET %s = ? WHERE raba_id = ?' % (self.__class__.__name__, ' = ?, '.join(self.sqlSave.keys()))
-				self.sqlSave['raba_id'] = self.raba_id
-				
-			self.connection.execute(sql, self.sqlSave.values())
+				values.append(self.raba_id)
+
+			self.connection.execute(sql, values)
 			self.connection.commit()
 			self._saved = True
 			self.sqlSave = {}
