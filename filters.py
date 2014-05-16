@@ -246,8 +246,6 @@ You will have to break your query into several smaller one. Sorry about that. (a
 				yield RabaPupa(self.rabaClass, v[0])
 			else :
 				yield v
-		return res
-
 
 if __name__ == '__main__' :
 	#import unittest
