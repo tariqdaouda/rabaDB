@@ -236,7 +236,7 @@ class _RabaSingleton_MetaClass(type) :
 
 		connection = RabaConnection(cls._raba_namespace)
 		ret = connection.getRabaObjectInfos(cls.__name__, params)
-
+		
 		if ret != None :
 			dbLine = ret.fetchone()
 		else :
@@ -246,8 +246,8 @@ class _RabaSingleton_MetaClass(type) :
 			if ret.fetchone() != None :
 				raise ValueError("More than one object fit the arguments you've prodided to the constructor")
 
-			if 'raba_id' in fieldsDct and res == None :
-				raise KeyError("There's no %s with a raba_id = %s" %(self._rabaClass.__name__, fieldsDct['raba_id']))
+			#if 'raba_id' in fieldsDct and res == None :
+			#	raise KeyError("There's no %s with a raba_id = %s" %(self._rabaClass.__name__, fieldsDct['raba_id']))
 
 			raba_id = dbLine[0]
 			key = makeRabaObjectSingletonKey(cls.__name__, cls._raba_namespace, raba_id)
@@ -260,8 +260,8 @@ class _RabaSingleton_MetaClass(type) :
 
 			if not hasattr(cls, '_raba_not_a_singleton') or not getattr(cls, '_raba_not_a_singleton') :
 				cls._instances[key] = obj
-
-		elif len(params) > 0 :
+		
+		elif len(params) > 0 : # params provided but no result
 			raise KeyError("Couldn't find any object that fit the arguments you've prodided to the constructor")
 		else :
 			obj = type.__call__(cls, *args, **fieldsDct)

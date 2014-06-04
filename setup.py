@@ -34,6 +34,7 @@ class RabaConfiguration(object) :
 		if dbFile == None :
 			raise ValueError("""No configuration detected for namespace '%s'.
 			Have you forgotten to add: %s('%s', 'the path to you db file') just after the import of setup?""" % (namespace, self.__class__.__name__, namespace))
+		#print dbFile
 		self.dbFile = dbFile
 
 
