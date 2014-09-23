@@ -9,12 +9,14 @@ class transcript(R.Raba) :
 	name = Primitive(default = '')
 	gene = RabaObject('gene')
 	def __init__(self, **fieldsSet) :
+		pass
 
 class Gene(R.Raba) :
 	_raba_namespace = 'test'
 	name = Primitive(default = '')
 	chromosome = RabaObject('Chromosome')
 	def __init__(self, **fieldsSet) :
+		pass
 
 class Chromosome(R.Raba) :
 	_raba_namespace = 'test'
@@ -22,7 +24,7 @@ class Chromosome(R.Raba) :
 	genes = Relation()
 	genes_2 = RList()
 	def __init__(self, **fieldsSet) :
-
+		pass
 
 
 print '\nCreate a gene'

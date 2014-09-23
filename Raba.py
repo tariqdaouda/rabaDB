@@ -121,7 +121,7 @@ class _RabaSingleton_MetaClass(type) :
 						sk = str(k)
 						if k.lower() != 'raba_id' and k.lower() != 'json' :
 							sqlFields.append(sk)
-						#columns[sk.lower()] = i
+
 						columns[sk] = i
 						columnsToLowerCase[sk.lower()] = sk
 						i += 1
@@ -245,9 +245,6 @@ class _RabaSingleton_MetaClass(type) :
 		if dbLine != None :
 			if ret.fetchone() != None :
 				raise ValueError("More than one object fit the arguments you've prodided to the constructor")
-
-			#if 'raba_id' in fieldsDct and res == None :
-			#	raise KeyError("There's no %s with a raba_id = %s" %(self._rabaClass.__name__, fieldsDct['raba_id']))
 
 			raba_id = dbLine[0]
 			key = makeRabaObjectSingletonKey(cls.__name__, cls._raba_namespace, raba_id)

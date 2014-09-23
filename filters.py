@@ -16,7 +16,7 @@ import fields as RabaFields
 #Equivalent queries
 #########
 #get all exons of a given transcript
-#f = RabaQuery(namespace, Exon)
+#f = RabaQuery(Exon, namespace)
 #
 #f.addFilter(**{'transcript' : myTrans})
 #f.addFilter({'transcript' : myTrans})
@@ -26,9 +26,9 @@ import fields as RabaFields
 #
 #of a given chromosome
 #query by number
-#f.addFilter("transcript->gene->chromosome = 22")
+#f.addFilter("transcript.gene.chromosome = 22")
 #query by object
-#f.addFilter(**{'transcript->gene->chromosome' : myChro})
+#f.addFilter(**{'transcript.gene.chromosome' : myChro})
 #exons = f.run()
 #
 ##########
@@ -150,7 +150,7 @@ class RabaQuery :
 		return '%s %s' % (' AND '.join(conditions), lastOperator)
 
 	def getSQLQuery(self, count = False) :
-		"Returns the query without performing it, If count, then the query wil be SELECT COUNT() instead of a SELECT"
+		"Returns the query without performing it. If count, the query returned will be a SELECT COUNT() instead of a SELECT"
 		sqlFilters = []
 		sqlValues = []
 		#print self.filters
@@ -179,6 +179,8 @@ You will have to break your query into several smaller one. Sorry about that. (a
 		else :
 			tablesStr =  ', '.join(self.tables)
 		
+		if len(sqlFilters) == 0 :
+			sqlFilters = '1'
 		if count :
 			sql = 'SELECT COUNT(*) FROM %s WHERE %s' % (tablesStr, sqlFilters)
 		else :
