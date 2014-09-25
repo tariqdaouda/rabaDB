@@ -1,53 +1,33 @@
-from rabaDB.setup import *
+from rabaDB.rabaSetup import *
 RabaConfiguration('test', './dbTest_BasicExample.db')
 import rabaDB.Raba as R
 from rabaDB.filters import *
 from rabaDB.fields import *
 
-class transcript(R.Raba) :
-	_raba_namespace = 'test'
-	name = Primitive(default = '')
-	gene = RabaObject('gene')
-	def __init__(self, **fieldsSet) :
+class Human(R.Raba) :
+	_raba_namespace = 'transPep'
+
+	name = rf.Primitive()
+	cars = rf.Relation('Car')
+	
+	def __init__(self) :
 		pass
 
-class Gene(R.Raba) :
-	_raba_namespace = 'test'
-	name = Primitive(default = '')
-	chromosome = RabaObject('Chromosome')
-	def __init__(self, **fieldsSet) :
-		pass
+class Car(R.Raba) :
+	_raba_namespace = 'transPep'
 
-class Chromosome(R.Raba) :
-	_raba_namespace = 'test'
-	id = Primitive(default = '')
-	genes = Relation()
-	genes_2 = RList()
-	def __init__(self, **fieldsSet) :
+	number = rf.Primitive()
+	def __init__(self) :
 		pass
 
 
-print '\nCreate a gene'
-gene = Gene()
-gene.set(name = 'TPST2')
-print '\nCreate or load the chromosome 22'
+georges = Human()
+georges.name = 'Georges'
+for i in range(10) :
+	car = Car()
+	car.number = i
+	georges.cars.append(car)
 
-try :
-	chro = Chromosome(id = '22')
-except :
-	chro = Chromosome()
-	chro.set(id = '22')
+georges.save()
 
-print '\nAdd the genes TPST2 the chromosome'
-chro.genes.append(gene)
-print '\nName of last gene in list'
-print chro.genes[-1].name
-print '\nthe complete list'
-print chro.genes
-print '\nsave the chromosome'
-chro.save()
-
-f = RabaQuery('test', transcript)
-f.addFilter(**{'gene->chromosome.id' : "22"})
-print f.run()
-
+sameGeorges = Human(name = 'Georges')
