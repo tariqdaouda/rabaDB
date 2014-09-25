@@ -2,7 +2,7 @@ import sqlite3 as sq
 import os, copy, types, cPickle, random, json, abc, sys#, weakref
 from collections import MutableSequence
 
-from setup import RabaConnection, RabaConfiguration
+from rrabaSetup import RabaConnection, RabaConfiguration
 import fields as RabaFields
 
 def makeRabaObjectSingletonKey(clsName, namespace, raba_id) :

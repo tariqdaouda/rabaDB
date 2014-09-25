@@ -1,6 +1,6 @@
 import re, types
 
-import setup as stp
+import rabaSetup as stp
 from Raba import *
 import fields as RabaFields
 
@@ -31,6 +31,9 @@ import fields as RabaFields
 #f.addFilter(**{'transcript.gene.chromosome' : myChro})
 #exons = f.run()
 #
+# #All exons :
+# f = RabaQuery(Exon)
+# f.run()
 ##########
 # AND/OR
 ##########

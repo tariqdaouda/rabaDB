@@ -50,35 +50,4 @@ chro.save()
 f = RabaQuery('test', transcript)
 f.addFilter(**{'gene->chromosome.id' : "22"})
 print f.run()
-'''
-#---------
-#Different types of equivalent queries
-#---------
 
-f = RabaQuery('test', Chromosome)
-f.addFilter(**{'id' : "22"})
-f.addFilter(['id = "22"', 'count(genes) = 4'])
-f.addFilter('count(genes) = 4', id = '= "22"')
-for chro2 in f.run() :
-	#print chro is chro2
-	print "The chromosome is here but not fully loaded"
-	print '\t', chro2
-	print "The genes are still not fully loaded"
-	print '\t', chro2.genes
-	print "Now that we've acceced one of it's attributes, the chromosome is fully loaded"
-	print '\t', chro2
-	print "The name of the first gene"
-	#print '\t', chro2.genes
-	print '\t', chro2.genes[0].name
-	#print '\t', chro2.genes[1].name
-	print "Only the first gene of the list is fully loaded"
-	print '\t', chro2.genes
-
-f = RabaQuery('test', Chromosome)
-f.addFilter(**{'id' : '= "22"'})
-f.addFilter(['id = "22"', 'count(genes) = 4'])
-f.addFilter('count(genes) = 4', id = '= "22"')
-
-for chro2 in f.run() :
-	print '\t', chro2.genes
-'''
