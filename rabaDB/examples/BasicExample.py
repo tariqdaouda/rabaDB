@@ -20,14 +20,14 @@ class Car(R.Raba) :
 	def __init__(self) :
 		pass
 
+if __name__ == '__main__':
+	georges = Human()
+	georges.name = 'Georges'
+	for i in range(10) :
+		car = Car()
+		car.number = i
+		georges.cars.append(car)
 
-georges = Human()
-georges.name = 'Georges'
-for i in range(10) :
-	car = Car()
-	car.number = i
-	georges.cars.append(car)
+	georges.save()
 
-georges.save()
-
-sameGeorges = Human(name = 'Georges')
+	sameGeorges = Human(name = 'Georges')
