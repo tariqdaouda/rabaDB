@@ -11,7 +11,7 @@ with open(path.join(here, 'DESCRIPTION.rst'), encoding='utf-8') as f:
 setup(
     name='rabaDB',
 
-    version='1.0.0rc1',
+    version='1.0.0',
 
     description='rabaDB is a lightweight schemaless ORM on top of sqlite3',
     long_description=long_description,
