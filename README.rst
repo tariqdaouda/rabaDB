@@ -14,8 +14,8 @@ For more about how to use it you can check the examples folder.
 	import rabaDB.fields as rf
 	
 	class Human(R.Raba) :
-		_raba_namespace = 'transPep'
-	
+		_raba_namespace = 'test'
+		
 		name = rf.Primitive()
 		cars = rf.Relation('Car')
 		
@@ -23,7 +23,7 @@ For more about how to use it you can check the examples folder.
 			pass
 	
 	class Car(R.Raba) :
-		_raba_namespace = 'transPep'
+		_raba_namespace = 'test'
 	
 		number = rf.Primitive()
 		def __init__(self) :
