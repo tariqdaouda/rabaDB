@@ -1,7 +1,7 @@
 rabaDB:
 =======
 
-rabaDB is a lightwight uncomplicated schemaless ORM on top of sqlite3.
+rabaDB is a lightweight uncomplicated schemaless ORM on top of sqlite3.
 For more about how to use it you can check the examples folder.
 
 .. code:: python
