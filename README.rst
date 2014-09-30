@@ -16,7 +16,10 @@ For more about how to use it you can check the examples folder.
 	class Human(R.Raba) :
 		_raba_namespace = 'test'
 		
+		#Everything that is not a raba object is primitive
 		name = rf.Primitive()
+		
+		#Only Cars can fit into this relation
 		cars = rf.Relation('Car')
 		
 		def __init__(self) :
