@@ -1,6 +1,7 @@
 rabaDB:
 =======
-(pip install rabaDB for the latest stable version)
+.. code::python
+	pip install rabaDB #for the latest stable version
 
 rabaDB is a lightweight uncomplicated schemaless ORM on top of sqlite3.
 
