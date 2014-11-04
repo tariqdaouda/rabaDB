@@ -8,7 +8,7 @@ Installation:
 	
 	pip install rabaDB #for the latest stable version
 
-That's it. No need for anything else.
+That's it, no need for anything else.
 
 Examples:
 ----
