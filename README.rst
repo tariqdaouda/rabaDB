@@ -1,4 +1,4 @@
-Save, Search, Modify your objects easily. You're welcome:
+Save, Search, Modify your objects easily. You're welcome.
 =======
 
 Installation:
