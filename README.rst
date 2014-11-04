@@ -1,4 +1,4 @@
-rabaDB:
+rabaDB Save, Search, Modify your objects, easily. You're welcome:
 =======
 .. code::python
 	pip install rabaDB #for the latest stable version
