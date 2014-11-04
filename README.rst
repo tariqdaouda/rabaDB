@@ -1,10 +1,19 @@
 Save, Search, Modify your objects easily. You're welcome:
 =======
-.. code::python
+
+Installation:
+----
+
+.. code:: python
+	
 	pip install rabaDB #for the latest stable version
 
-rabaDB is a lightweight uncomplicated schemaless ORM on top of sqlite3.
+That's it. No need for anything else.
 
+Examples:
+----
+
+rabaDB is a lightweight uncomplicated schemaless ORM on top of sqlite3.
 For more about how to use it you can check the examples folder.
 
 .. code:: python
