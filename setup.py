@@ -13,7 +13,7 @@ setup(
 
     version='1.0.0',
 
-    description='rabaDB is a lightweight schemaless ORM on top of sqlite3',
+    description="Save, Search, Modify your objects easily. You're welcome.",
     long_description=long_description,
     
     url='https://github.com/tariqdaouda/rabaDB',
@@ -37,8 +37,8 @@ setup(
         'Topic :: Scientific/Engineering :: Bio-Informatics',
         'Topic :: Software Development :: Libraries',
         'Topic :: Database',
-		'Topic :: Database :: Database Engines/Servers',
-		'Topic :: Database :: Front-Ends',
+	'Topic :: Database :: Database Engines/Servers',
+	'Topic :: Database :: Front-Ends',
 
         'License :: OSI Approved :: GNU General Public License v2 (GPLv2)',
 
