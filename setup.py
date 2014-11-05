@@ -21,7 +21,7 @@ setup(
     author='Tariq Daouda',
     author_email='tariq.daouda@umontreal.ca',
 
-    license='GPLv2',
+    license='ApacheV2.0',
 
     # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
     classifiers=[
@@ -40,7 +40,7 @@ setup(
 	'Topic :: Database :: Database Engines/Servers',
 	'Topic :: Database :: Front-Ends',
 
-        'License :: OSI Approved :: GNU General Public License v2 (GPLv2)',
+        'License :: OSI Approved :: Apache Software License',
 
         'Programming Language :: Python :: 2.7',
     ],
