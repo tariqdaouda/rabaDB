@@ -37,7 +37,6 @@ class RabaConfiguration(object) :
 		#print dbFile
 		self.dbFile = dbFile
 
-
 class RabaConnection(object) :
 	"""A class that manages the connection to the sqlite3 database. Don't be afraid to call RabaConnection() as much as you want. By default Raba tries to be smart and commits only when
 	you save a rabaobject but if you want complete controle over the commit process you can use setAutoCommit(False) and then use commit() manually"""

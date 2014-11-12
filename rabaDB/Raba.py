@@ -40,6 +40,77 @@ def isPythonPrimitive(v) :
 			return True
 	return False
 
+class _RabaListPupaSingleton_Metaclass(abc.ABCMeta):
+	_instances = {}
+
+	def __call__(clsObj, *args, **kwargs):
+		anchorObj = kwargs['anchorObj']
+		relationName = kwargs['relationName']
+		length = kwargs['length']
+
+		key = (anchorObj._runtimeId, relationName)
+
+		if key in _RabaListSingleton_Metaclass._instances :
+			return _RabaListSingleton_Metaclass._instances[key]
+		if key in clsObj._instances :
+			return clsObj._instances[key]
+
+		connection = RabaConnection(anchorObj._raba_namespace)
+
+		obj = super(_RabaListPupaSingleton_Metaclass, clsObj).__call__(*args, anchorObj = anchorObj, relationName = relationName, length = length)
+
+		clsObj._instances[key] = obj
+		return obj
+	
+	@classmethod
+	def freeRegistery(cls) :
+		"""Empties the registery. This is useful if you want to allow the garbage collector to free the memory
+		taken by the objects you've already loaded. Be careful might cause some discrepenties in your scripts"""
+		cls._instances = {}
+	
+	@classmethod
+	def removeFromRegistery(cls, obj) :
+		"""Removes an object from registery. This is useful if you want to allow the garbage collector to free the memory
+		taken by the objects you've already loaded. Be careful might cause some discrepenties in your scripts"""
+		key = (obj.anchorObj._runtimeId, obj.relationName)
+		try :
+			del(cls._instances[key])
+		except KeyError :
+			pass
+
+class _RabaListSingleton_Metaclass(abc.ABCMeta):
+	_instances = {}
+
+	def __call__(clsObj, *args, **kwargs):
+
+		if 'anchorObj' in kwargs and 'relationName' in kwargs :
+			anchorObj = kwargs['anchorObj']
+			relationName = kwargs['relationName']
+
+			key = (anchorObj._runtimeId, relationName)
+
+			if key in clsObj._instances :
+				return clsObj._instances[key]
+
+			clsObj._instances[key] = super(RabaList_Metaclass, clsObj).__call__(*args, **kwargs)
+
+			return clsObj._instances[key]
+		return super(_RabaListSingleton_Metaclass, clsObj).__call__(*args, **kwargs)
+
+	def freeRegistery(cls) :
+		"""Empties the registery. This is useful if you want to allow the garbage collector to free the memory
+		taken by the objects you've already loaded. Be careful might cause some discrepenties in your scripts"""
+		cls._instances = {}
+
+	def removeFromRegistery(cls, obj) :
+		"""Removes an object from registery. This is useful if you want to allow the garbage collector to free the memory
+		taken by the objects you've already loaded. Be careful might cause some discrepenties in your scripts"""
+		key = (obj.anchorObj._runtimeId, obj.relationName)
+		try :
+			del(cls._instances[key])
+		except KeyError :
+			pass
+
 class _RabaPupaSingleton_Metaclass(type):
 	_instances = {}
 	def __call__(clsObj, *args, **kwargs):
@@ -61,49 +132,23 @@ class _RabaPupaSingleton_Metaclass(type):
 			clsObj._instances[key] = super(_RabaPupaSingleton_Metaclass, clsObj).__call__(*args, **kwargs)
 
 		return clsObj._instances[key]
-
-
-class RabaListPupaSingleton_Metaclass(abc.ABCMeta):
-	_instances = {}
-
-	def __call__(clsObj, *args, **kwargs):
-		anchorObj = kwargs['anchorObj']
-		relationName = kwargs['relationName']
-		length = kwargs['length']
-
-		key = (anchorObj._runtimeId, relationName)
-
-		if key in RabaListSingleton_Metaclass._instances :
-			return RabaListSingleton_Metaclass._instances[key]
-		if key in clsObj._instances :
-			return clsObj._instances[key]
-
-		connection = RabaConnection(anchorObj._raba_namespace)
-
-		obj = super(RabaListPupaSingleton_Metaclass, clsObj).__call__(*args, anchorObj = anchorObj, relationName = relationName, length = length)
-
-		clsObj._instances[key] = obj
-		return obj
-
-class RabaListSingleton_Metaclass(abc.ABCMeta):
-	_instances = {}
-
-	def __call__(clsObj, *args, **kwargs):
-
-		if 'anchorObj' in kwargs and 'relationName' in kwargs :
-			anchorObj = kwargs['anchorObj']
-			relationName = kwargs['relationName']
-
-			key = (anchorObj._runtimeId, relationName)
-
-			if key in clsObj._instances :
-				return clsObj._instances[key]
-
-			clsObj._instances[key] = super(RabaList_Metaclass, clsObj).__call__(*args, **kwargs)
-
-			return clsObj._instances[key]
-		return super(RabaListSingleton_Metaclass, clsObj).__call__(*args, **kwargs)
-
+	
+	@classmethod
+	def freeRegistery(cls) :
+		"""Empties the registery. This is useful if you want to allow the garbage collector to free the memory
+		taken by the objects you've already loaded. Be careful might cause some discrepenties in your scripts"""
+		cls._instances = {}
+	
+	@classmethod
+	def removeFromRegistery(cls, obj) :
+		"""Removes an object from registery. This is useful if you want to allow the garbage collector to free the memory
+		taken by the objects you've already loaded. Be careful might cause some discrepenties in your scripts"""
+		key = makeRabaObjectSingletonKey(obj.__class__.__name__, obj._raba_namespace, obj.raba_id)
+		try :
+			del(cls._instances[key])
+		except KeyError :
+			pass
+	
 class _RabaSingleton_MetaClass(type) :
 
 	_instances = {}
@@ -266,6 +311,48 @@ class _RabaSingleton_MetaClass(type) :
 
 		return obj
 
+	@classmethod
+	def freeRegistery(cls) :
+		"""Empties the registery. This is useful if you want to allow the garbage collector to free the memory
+		taken by the objects you've already loaded. Be careful might cause some discrepenties in your scripts.
+		Cascades to free the registeries of rabalists also"""
+		cls._instances = {}
+		_RabaListPupaSingleton_Metaclass.freeRegistery()
+		_RabaListSingleton_Metaclass.freeRegistery()
+	
+	@classmethod
+	def removeFromRegistery(cls, obj) :
+		"""Removes an object from registery. This is useful if you want to allow the garbage collector to free the memory
+		taken by the objects you've already loaded. Be careful might cause some discrepenties in your scripts. Cascades to free the registeries of related rabalists also"""
+		key = makeRabaObjectSingletonKey(obj.__class__.__name__, obj._raba_namespace, obj.raba_id)
+		for l in obj.rabaLists :
+			if isinstance(l, RabaList) :
+				_RabaListSingleton_Metaclass.__.removeFromRegistery(l)
+			elif isinstance(l, RabaListPupa) :
+				_RabaListPupaSingleton_Metaclass.__.removeFromRegistery(l)
+		
+		try :
+			del(cls._instances[key])
+		except KeyError :
+			pass
+		
+def freeRegistery() :
+	"""Empties all registeries. This is useful if you want to allow the garbage collector to free the memory
+	taken by the objects you've already loaded. Be careful might cause some discrepenties in your scripts"""
+	_RabaSingleton_MetaClass.freeRegistery()
+	_RabaPupaSingleton_Metaclass.freeRegistery()
+
+def removeFromRegistery(obj) :
+	if isinstance(obj, Raba) :
+		_RabaSingleton_MetaClass.removeFromRegistery(obj)
+	elif isinstance(obj, RabaPupa) :
+		_RabaPupaSingleton_Metaclass.removeFromRegistery(obj)
+	elif isinstance(obj, RabaListPupa) :
+		_RabaListPupaSingleton_Metaclass.removeFromRegistery(obj)
+	elif isinstance(obj, RabaList) :
+		_RabaListSingleton_Metaclass.removeFromRegistery(obj)
+	
+
 class RabaPupa(object) :
 	"""One of the founding principles of RabaDB is to separate the storage from the code. Fields are stored in the DB while the processing only depends
 	on your python code. This approach ensures a higher degree of stability by preventing old objects from lurking inside the DB before popping out of nowhere several decades afterwards.
@@ -368,7 +455,7 @@ class Raba(object):
 			else :
 				raise ValueError("Unable to set field %s to %s in Raba object %s" %(k, dbLine[i], self._rabaClass.__name__))
 
-		self.rabaLists = []
+		#~ self.rabaLists = []
 		for k, leng in lists :
 			rlp = RabaListPupa(anchorObj = self, relationName = k, length = leng)
 			self.__setattr__(k, rlp)
@@ -379,7 +466,8 @@ class Raba(object):
 		self.sqlSave = {}
 		self.sqlSaveQMarks = {}
 		self.listsToSave = {}
-
+		self.rabaLists = []
+	
 		if self.__class__ is Raba :
 			raise TypeError('Raba class should never be instanciated, use inheritance')
 
@@ -617,7 +705,7 @@ class Raba(object):
 class RabaListPupa(MutableSequence) :
 
 	_isRabaList = True
-	__metaclass__ = RabaListPupaSingleton_Metaclass
+	__metaclass__ = _RabaListPupaSingleton_Metaclass
 
 	def __init__(self, **kwargs) :
 		self._runtimeId = (self.__class__.__name__, random.random()) #this is using only during runtime ex, to avoid circular calls
@@ -697,7 +785,7 @@ class RabaList(MutableSequence) :
 	tables that contain only one single line"""
 
 	_isRabaList = True
-	__metaclass__ = RabaListSingleton_Metaclass
+	__metaclass__ = _RabaListSingleton_Metaclass
 
 	def _checkElmt(self, v) :
 		if self.anchorObj != None :

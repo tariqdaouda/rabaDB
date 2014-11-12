@@ -11,9 +11,9 @@ with open(path.join(here, 'DESCRIPTION.rst'), encoding='utf-8') as f:
 setup(
     name='rabaDB',
 
-    version='1.0.0',
+    version='1.0.1',
 
-    description="Save, Search, Modify your objects easily. You're welcome.",
+    description="Store, Search, Modify your objects easily. You're welcome.",
     long_description=long_description,
     
     url='https://github.com/tariqdaouda/rabaDB',
@@ -37,8 +37,8 @@ setup(
         'Topic :: Scientific/Engineering :: Bio-Informatics',
         'Topic :: Software Development :: Libraries',
         'Topic :: Database',
-	'Topic :: Database :: Database Engines/Servers',
-	'Topic :: Database :: Front-Ends',
+		'Topic :: Database :: Database Engines/Servers',
+		'Topic :: Database :: Front-Ends',
 
         'License :: OSI Approved :: Apache Software License',
 
@@ -47,7 +47,7 @@ setup(
 
     keywords='database ORM sqlite3',
 
-    packages=find_packages(exclude=['tests']),
+    packages=find_packages(exclude=['trash']),
 
     # List run-time dependencies here.  These will be installed by pip when your
     # project is installed. For an analysis of "install_requires" vs pip's
