@@ -8,6 +8,9 @@ import fields as RabaFields
 def makeRabaObjectSingletonKey(clsName, namespace, raba_id) :
 	return (clsName, namespace, raba_id)
 
+def makeRabaListSingletonKey(anchorObj, relationName) :
+	return (anchorObj._runtimeId, relationName)
+
 def _recClassCheck(v, cls) :
 	if v is cls : return True
 
@@ -48,7 +51,7 @@ class _RabaListPupaSingleton_Metaclass(abc.ABCMeta):
 		relationName = kwargs['relationName']
 		length = kwargs['length']
 
-		key = (anchorObj._runtimeId, relationName)
+		key = makeRabaListSingletonKey(anchorObj, relationName)
 
 		if key in _RabaListSingleton_Metaclass._instances :
 			return _RabaListSingleton_Metaclass._instances[key]
@@ -87,7 +90,7 @@ class _RabaListSingleton_Metaclass(abc.ABCMeta):
 			anchorObj = kwargs['anchorObj']
 			relationName = kwargs['relationName']
 
-			key = (anchorObj._runtimeId, relationName)
+			key = makeRabaListSingletonKey(anchorObj, relationName)
 
 			if key in clsObj._instances :
 				return clsObj._instances[key]
@@ -97,11 +100,13 @@ class _RabaListSingleton_Metaclass(abc.ABCMeta):
 			return clsObj._instances[key]
 		return super(_RabaListSingleton_Metaclass, clsObj).__call__(*args, **kwargs)
 
+	@classmethod
 	def freeRegistery(cls) :
 		"""Empties the registery. This is useful if you want to allow the garbage collector to free the memory
 		taken by the objects you've already loaded. Be careful might cause some discrepenties in your scripts"""
 		cls._instances = {}
 
+	@classmethod
 	def removeFromRegistery(cls, obj) :
 		"""Removes an object from registery. This is useful if you want to allow the garbage collector to free the memory
 		taken by the objects you've already loaded. Be careful might cause some discrepenties in your scripts"""
@@ -339,8 +344,18 @@ class _RabaSingleton_MetaClass(type) :
 def freeRegistery() :
 	"""Empties all registeries. This is useful if you want to allow the garbage collector to free the memory
 	taken by the objects you've already loaded. Be careful might cause some discrepenties in your scripts"""
+	freeListRegistery()
+	freeObjectRegistery()
+	
+def freeListRegistery() :
+	"""same as freeRegistery() bu only for lists"""
 	_RabaSingleton_MetaClass.freeRegistery()
 	_RabaPupaSingleton_Metaclass.freeRegistery()
+
+def freeObjectRegistery() :
+	"""same as freeRegistery() bu only for objects"""
+	_RabaListPupaSingleton_Metaclass.freeRegistery()
+	_RabaListSingleton_Metaclass.freeRegistery()
 
 def removeFromRegistery(obj) :
 	if isinstance(obj, Raba) :
