@@ -67,7 +67,7 @@ def _unregisterRabaObjectInstance(obj) :
 	key = (obj.__class__, obj._raba_namespace, obj.raba_id)
 	
 	if not isRabaObjectPupa(obj) :
-		for l in obj.rabaLists() :
+		for l in obj.rabaLists :
 			_unregisterRabaListInstance(l)
 	
 	try :
