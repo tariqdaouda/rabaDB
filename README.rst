@@ -92,6 +92,7 @@ Indexation
 No problem:
 
 .. code:: python
+	
 	Human.ensureIndex('name')
 	#even on several fields
 	Human.ensureIndex(('name', 'age', 'city'))
@@ -109,7 +110,9 @@ and filters are between them are merged by "Or".
 	#Or
 	f = RabaQuery('Human')
 	
-	f.addFilter(**{'name' : '= "mark"'})
+	#
+	f.addFilter(name = "mark", age = "22")
+	f.addFilter(name = "john", age = "27")
 	print f.run()
 	
 Debugging
