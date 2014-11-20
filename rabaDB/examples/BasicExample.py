@@ -5,7 +5,7 @@ from rabaDB.filters import *
 from rabaDB.fields import *
 
 class Human(R.Raba) :
-	_raba_namespace = 'transPep'
+	_raba_namespace = 'test'
 
 	name = rf.Primitive()
 	cars = rf.Relation('Car')
@@ -14,7 +14,7 @@ class Human(R.Raba) :
 		pass
 
 class Car(R.Raba) :
-	_raba_namespace = 'transPep'
+	_raba_namespace = 'test'
 
 	number = rf.Primitive()
 	def __init__(self) :
