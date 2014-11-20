@@ -10,7 +10,7 @@ Installation:
 
 That's it, no need for anything else.
 
-What's rabaDB:
+What's rabaDB
 -------------
 
 rabaDB is a lightweight uncomplicated schemaless ORM on top of sqlite3.
@@ -30,11 +30,10 @@ whole genomes annonations, along with huge sets of polymorphisms, and it's perfo
 
 .. _pyGeno: https://github.com/tariqdaouda/pyGeno
 
-
-Example:
+Example
 -------
 
-RabaDB has only four variable types:
+RabaDB has only **four** variable types:
 
 *Primitive:
 	- Numbers
@@ -60,6 +59,8 @@ RabaDB has only four variable types:
 		
 		#Everything that is not a raba object is primitive
 		name = rf.Primitive()
+		age = rf.Primitive()
+		city = rf.Primitive()
 		
 		#Only Cars can fit into this relation
 		cars = rf.Relation('Car')
@@ -85,3 +86,32 @@ RabaDB has only four variable types:
 		georges.save()
 	
 		sameGeorges = Human(name = 'Georges')
+
+Indexation
+-----------
+No problem:
+
+.. code:: python
+	Human.ensureIndex('name')
+	#even on several fields
+	Human.ensureIndex(('name', 'age', 'city'))
+
+Querying by example
+-------------------
+Querying is done by creating filters, all the conditions inside the same filter are merge by "And"
+and filters are between them are merged by "Or".
+
+.. code:: python
+
+	from rabaDB.filters import *
+	
+	f = RabaQuery(Human)
+	#Or
+	f = RabaQuery('Human')
+	
+	f.addFilter(**{'name' : '= "mark"'})
+	print f.run()
+	
+Debugging
+---------
+To be written
