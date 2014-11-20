@@ -1,8 +1,8 @@
 Save, Search, Modify your objects easily. You're welcome.
-=======
+=========================================================
 
 Installation:
-----
+-------------
 
 .. code:: python
 	
@@ -10,15 +10,46 @@ Installation:
 
 That's it, no need for anything else.
 
-Examples:
-----
+What's rabaDB:
+-------------
 
 rabaDB is a lightweight uncomplicated schemaless ORM on top of sqlite3.
 
-For more about how to use it you can check the examples folder.
+Basicly it means:
+
+* Uncomplicated syntax
+* Lazy and Optimized: objects are only fully loaded if you need them to be
+* Supports Queries by examples and SQL
+* Super easy installation, no dependencies
+
+Can it be used for "big projects":
+---------------------------------
+
+rabaDB is the backend behind pyGeno_, a python package for genomics and protemics where it is typically used to store
+whole genomes annonations, along with huge sets of polymorphisms, and it's performing really well.
+
+.. _pyGeno: https://github.com/tariqdaouda/pyGeno
+
+
+Example:
+-------
+
+RabaDB has only four variable types:
+
+*Primitive:
+	- Numbers
+	- Strings
+	- Serialized objects
+*RabaObject
+	- An object whose class derives from Raba.Raba
+*Relation:
+	- A list of only a certain type of RabaObject 
+*RList:
+	- A list of anything
 
 .. code:: python
 	
+	#The initialisation
 	from rabaDB.rabaSetup import *
 	RabaConfiguration('test', './dbTest_BasicExample.db')
 	import rabaDB.Raba as R
