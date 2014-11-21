@@ -126,8 +126,8 @@ There are several syntaxes that you can use.
 	f = RabaQuery('Human')
 	
 	f.addFilter(name = "Fela", age = "22")
-	#Or
-	f.addFilter(**{"age >=" : 22, "name like": "fel%"})
+	#Or the fancier
+	f.addFilter({"age >=" : 22, "name like": "fel%"})
 	#Or
 	f.addFilter(['age = "22"', 'name = Fela'])
 
@@ -146,25 +146,43 @@ You can add an SQL statement at the end
 		print r
 	
 
+Querying SQL style
+------------------
+
 You can also write your own SQL *WHERE* conditions
 
 .. code:: python
+
+	from rabaDB.filters import *
+	
+	f = RabaQuery(Human)
 	
 	for r in f.runWhere("age = ?, name = ?" , (22, "fela")) :
 		print r
 
-By default these functions return RabaObject, but you can always ask for the raw SQl tuple:
+
+Getting raw SQL 
+----------------
+
+By default all querying functions return RabaObject, but you can always ask for the raw SQl tuple:
 
 .. code:: python
 	
 	f.run(raw = True)
 	f.runWere(("age = ?, name = ?" , (22, "fela"), raw = True)
 
+Yes, but I just want to loop through the results  
+------------------------------------------------
+
 There are also iterative versions. They have the same interface but they are faster and less memory consuming
+	
 	* f.iterRun
 	* f.iterRunWhere
 
-And here's how you do counts
+And counts?
+----------
+
+Here's how you do counts
 
 .. code:: python
 	from rabaDB.filters import *
@@ -175,4 +193,8 @@ And here's how you do counts
 
 Debugging
 ---------
-To be written
+ work in progress
+ .. code:: python
+ 
+ 	import rabaDB.rabaSetup
+ 	dbConf = rabaDB.rabaSetup.RabaConfiguration("mynamespace")
