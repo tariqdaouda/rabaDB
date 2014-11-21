@@ -83,8 +83,9 @@ RabaDB has only **four** variable types:
 			car.number = i
 			georges.cars.append(car)
 	
+		#saving georges also saves all his cars to the db
 		georges.save()
-	
+		
 		sameGeorges = Human(name = 'Georges')
 
 Indexation
@@ -96,11 +97,25 @@ No problem:
 	Human.ensureIndex('name')
 	#even on several fields
 	Human.ensureIndex(('name', 'age', 'city'))
+	
+	#To drop an index
+	Human.dropIndex('name')
 
 Querying by example
 -------------------
-Querying is done by creating filters, all the conditions inside the same filter are merge by "And"
-and filters are between them are merged by "Or".
+Querying by example is done by creating filters, all the conditions inside the same filter are merged by "And"
+and filters between them are merged by "Or".
+
+.. code::
+
+	f = RabaQuery(SomeClass)
+	
+	f.addFilter(A1, A2, A3)
+	f.addFilter(B1, B2)
+	
+	Means: (A1 AND A2 AND A3) OR (B1 AND B2)
+
+There are several syntaxes that you can use.
 
 .. code:: python
 
@@ -110,11 +125,54 @@ and filters are between them are merged by "Or".
 	#Or
 	f = RabaQuery('Human')
 	
-	#
-	f.addFilter(name = "mark", age = "22")
-	f.addFilter(name = "john", age = "27")
-	print f.run()
+	f.addFilter(name = "Fela", age = "22")
+	#Or
+	f.addFilter(**{"age >=" : 22, "name like": "fel%"})
+	#Or
+	f.addFilter(['age = "22"', 'name = Fela'])
+
+And then here's how you get your results:
+
+.. code:: python
+
+	for r in f.run() :
+		print r
 	
+You can add an SQL statement at the end
+
+.. code:: python
+	
+	for r in f.run(sqlTail = "ORDER By age") :
+		print r
+	
+
+You can also write your own SQL *WHERE* conditions
+
+.. code:: python
+	
+	for r in f.runWhere("age = ?, name = ?" , (22, "fela")) :
+		print r
+
+By default these functions return RabaObject, but you can always ask for the raw SQl tuple:
+
+.. code:: python
+	
+	f.run(raw = True)
+	f.runWere(("age = ?, name = ?" , (22, "fela"), raw = True)
+
+There are also iterative versions. They have the same interface but they are faster and less memory consuming
+	* f.iterRun
+	* f.iterRunWhere
+
+And here's how you do counts
+
+.. code:: python
+	from rabaDB.filters import *
+	
+	f = RabaQuery(Human)
+	f.addFilter(age = "22")
+	print f.count()
+
 Debugging
 ---------
 To be written
