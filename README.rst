@@ -26,12 +26,34 @@ Can it be used for "big projects":
 ---------------------------------
 
 rabaDB is the backend behind pyGeno_, a python package for genomics and protemics where it is typically used to store
-whole genomes annonations, along with huge sets of polymorphisms, and it's performing really well.
+whole genomes annonations, along with huge sets of polymorphisms, millions of entries. and it's performing really well.
 
 .. _pyGeno: https://github.com/tariqdaouda/pyGeno
 
-Example
--------
+
+What's a namespace ?
+-------------------
+
+You can thing of rabaDB's namespace as independent databases. Each namespace has a name a file where all the data
+will be saved. Here's how you initialise rabaDb:
+
+.. code:: python
+	
+	#The initialisation
+	from rabaDB.rabaSetup import *
+	RabaConfiguration('test', './dbTest_BasicExample.db')
+
+Once you've done that, the configuration is a singleton attached to the namespace. You can access 
+if everywhere in you script by simply doing:
+
+.. code:: python
+	
+	myConf = RabaConfiguration('test')
+
+To know what you can do with that, have a look at the debugging part.
+
+Field types
+-----------
 
 RabaDB has only **four** variable types:
 
@@ -45,6 +67,9 @@ RabaDB has only **four** variable types:
 	- A list of only a certain type of RabaObject 
 *RList:
 	- A list of anything
+
+Example
+-------
 
 .. code:: python
 	
