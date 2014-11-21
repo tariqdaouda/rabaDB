@@ -34,7 +34,7 @@ whole genomes annonations, along with huge sets of polymorphisms, millions of en
 What's a namespace ?
 -------------------
 
-You can thing of rabaDB's namespace as independent databases. Each namespace has a name a file where all the data
+You can think of rabaDB's namespace as independent databases. Each namespace has a name a file where all the data
 will be saved. Here's how you initialise rabaDb:
 
 .. code:: python
@@ -43,12 +43,21 @@ will be saved. Here's how you initialise rabaDb:
 	from rabaDB.rabaSetup import *
 	RabaConfiguration('test', './dbTest_BasicExample.db')
 
-Once you've done that, the configuration is a singleton attached to the namespace. You can access 
-if everywhere in you script by simply doing:
+Once you've done that, the configuration is a singleton attached to the namespace. If the filename does not exists
+it will be created for you.
+
+You can access it everywhere in you script by simply doing
 
 .. code:: python
 	
 	myConf = RabaConfiguration('test')
+
+There's also a connection object associated to the namespace
+
+.. code:: python
+	
+	myConf = RabaConfiguration('test')
+	
 
 To know what you can do with that, have a look at the debugging part.
 
@@ -218,8 +227,14 @@ Here's how you do counts
 
 Debugging
 ---------
+
+RabaDb has an extensive debugging tools that you can access through the namespace's connection.
+
  work in progress
  .. code:: python
  
  	import rabaDB.rabaSetup
  	dbConf = rabaDB.rabaSetup.RabaConfiguration("mynamespace")
+
+Is it really schemaless ?
+------------------------
