@@ -27,7 +27,7 @@ Basicly it means:
 Can it be used for "big projects"?
 ----------------------------------
 
-rabaDB is the backend behind pyGeno_, a python package for genomics and protemics where it is typically used to store
+rabaDB is the backend behind pyGeno_, a python package for genomics and proteomics where it is typically used to store
 whole genomes annonations, along with huge sets of polymorphisms: millions of entries. and it's performing really well.
 
 .. _pyGeno: https://github.com/tariqdaouda/pyGeno
