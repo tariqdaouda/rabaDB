@@ -26,7 +26,7 @@ Can it be used for "big projects"?
 ----------------------------------
 
 rabaDB is the backend behind pyGeno_, a python package for genomics and protemics where it is typically used to store
-whole genomes annonations, along with huge sets of polymorphisms, millions of entries. and it's performing really well.
+whole genomes annonations, along with huge sets of polymorphisms: millions of entries. and it's performing really well.
 
 .. _pyGeno: https://github.com/tariqdaouda/pyGeno
 
@@ -34,7 +34,7 @@ whole genomes annonations, along with huge sets of polymorphisms, millions of en
 What's a namespace?
 -------------------
 
-You can think of rabaDB's namespace as independent databases. Each namespace has a name a file where all the data
+You can think of rabaDB's namespace as independent databases. Each namespace has a name and a file where all the data
 will be saved. Here's how you initialise rabaDb:
 
 .. code:: python
@@ -43,7 +43,7 @@ will be saved. Here's how you initialise rabaDb:
 	from rabaDB.rabaSetup import *
 	RabaConfiguration('test', './dbTest_BasicExample.db')
 
-Once you've done that, the configuration is a singleton attached to the namespace. If the filename does not exists
+Once you've done that, the configuration is a singleton attached to the namespace. If the filename does not exist
 it will be created for you.
 
 You can access it everywhere in you script by simply doing
@@ -229,14 +229,44 @@ Here's how you do counts
 Debugging
 ---------
 
-RabaDb has debugging tools that you can access through the namespace's connection.
+RabaDB has debugging tools that you can access through the namespace's connection.
 
  work in progress
  
  .. code:: python
  
  	import rabaDB.rabaSetup
- 	dbConf = rabaDB.rabaSetup.RabaConnection("mynamespace")
+ 	conn = rabaDB.rabaSetup.RabaConnection("mynamespace")
+	
+	#printing the SQL queries
+	conn.enableQueryPrint(True)
+	#the part you want to debug
+	conn.enableQueryPrint(False)
+	#debug: print each SQL querie and asks the permition to continue
+	conn.enableDebug(True)
+	#the part you want to debug
+	conn.enableDebug(False)
+	
+	#record all the queries performed
+	conn.enableStats(True, logQueries = True)
+	#the part you want to debug
+	conn.enableStats(False)
+	#a pretty print
+	conn.printStats()
+	
+	#when you're done
+	conn.eraseStats()
+	
+Transactions
+------------
+
+You can group several queries into one single transaction
+
+ .. code:: python
+ 
+ 	conn.beginTransaction()
+ 	#a lot of object saving
+ 	conn.endTransaction()
 
 Schemaless?
 ------------
