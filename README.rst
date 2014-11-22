@@ -282,10 +282,10 @@ Inheritence
 -----------
 
 rabaDB fully supports inheritence. Children classes automatically inherit the fields of their parents.
-rabaDB also supports abstract classes, that is to say classes that never meant to be instanciated and that only
+rabaDB also supports abstract classes, that is to say classes that are never meant to be instanciated and that only
 serve as templates for other classes. Abstract classes have no effect on the database
 
-Here's how you declare an abstract classes:
+Here's how you declare an abstract classe:
 
 .. code:: python
 	
