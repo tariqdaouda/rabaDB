@@ -19,7 +19,7 @@ Basicly it means:
 
 * *Uncomplicated syntax*
 * *No SQL knowledge needed*: Supports queries by example
-* But *you can still use SQL*
+* *You can still use SQL* if you want
 * *Lazy and Optimized*: objects are only fully loaded if you need them to be
 * *No dependencies*: Super easy installation 
 * *Somewhat Schemaless*: You can modify field definitions whenever you want and it will automatically adapt to the new schema
