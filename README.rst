@@ -198,7 +198,7 @@ You can also write your own SQL *WHERE* conditions
 Getting raw SQL 
 ----------------
 
-By default all querying functions return raba Object, but you can always ask for the raw ***SQL*** tuple:
+By default all querying functions return raba Object, but you can always ask for the raw **SQL** tuple:
 
 .. code:: python
 	
@@ -229,14 +229,14 @@ Here's how you do counts
 Debugging
 ---------
 
-RabaDb has an extensive debugging tools that you can access through the namespace's connection.
+RabaDb has debugging tools that you can access through the namespace's connection.
 
  work in progress
  
  .. code:: python
  
  	import rabaDB.rabaSetup
- 	dbConf = rabaDB.rabaSetup.RabaConfiguration("mynamespace")
+ 	dbConf = rabaDB.rabaSetup.RabaConnection("mynamespace")
 
 Schemaless?
 ------------
