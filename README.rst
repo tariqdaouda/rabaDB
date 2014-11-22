@@ -22,8 +22,8 @@ Basicly it means:
 * Supports Queries by examples and SQL
 * Super easy installation, no dependencies
 
-Can it be used for "big projects":
----------------------------------
+Can it be used for "big projects"?
+----------------------------------
 
 rabaDB is the backend behind pyGeno_, a python package for genomics and protemics where it is typically used to store
 whole genomes annonations, along with huge sets of polymorphisms, millions of entries. and it's performing really well.
@@ -198,7 +198,7 @@ You can also write your own SQL *WHERE* conditions
 Getting raw SQL 
 ----------------
 
-By default all querying functions return RabaObject, but you can always ask for the raw SQl tuple:
+By default all querying functions return raba Object, but you can always ask for the raw SQL tuple:
 
 .. code:: python
 	
@@ -232,6 +232,7 @@ Debugging
 RabaDb has an extensive debugging tools that you can access through the namespace's connection.
 
  work in progress
+ 
  .. code:: python
  
  	import rabaDB.rabaSetup
