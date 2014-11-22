@@ -1,7 +1,7 @@
 Save, Search, Modify your objects easily. You're welcome.
 =========================================================
 
-Installation:
+Installation
 -------------
 
 .. code:: python
@@ -251,7 +251,7 @@ Here's how you do counts
 	f.addFilter(age = "22")
 	print f.count()
 
-Registery:
+Registery
 ---------
 
 rabaDB keeps an internal registery to ensure a strong object consistency. If you do:
