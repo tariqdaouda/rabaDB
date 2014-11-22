@@ -130,8 +130,9 @@ Schemaless?
 
 rabaDB allows you to change the schemas of your classes on the fly. That means that you can add and remove fields
 from your class definitions at any moment during the developement and rabaDB will take care of composing with the
-SQL backend. However keep in mind that whenever you remove a field, all the information relative to this field
-are lost for ever.
+SQL backend. However keep in mind that whenever you remove a field, all the information relative to that field
+are lost forever.
+
 You can even erase whole class definitions from you code, and rabaDB will automatically update the database.
 
 Indexation
@@ -320,7 +321,7 @@ rabaDB fully supports inheritence. Children classes automatically inherit the fi
 rabaDB also supports abstract classes, that is to say classes that are never meant to be instanciated and that only
 serve as templates for other classes. Abstract classes have no effect on the database
 
-Here's how you declare an abstract classe:
+Here's how you declare an abstract class:
 
 .. code:: python
 	
