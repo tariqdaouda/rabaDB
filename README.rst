@@ -230,8 +230,6 @@ Debugging
 ---------
 
 RabaDB has debugging tools that you can access through the namespace's connection.
-
- work in progress
  
  .. code:: python
  
