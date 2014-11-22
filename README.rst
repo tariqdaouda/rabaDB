@@ -124,9 +124,6 @@ Example
 		#saving georges also saves all his cars to the db
 		georges.save()
 
-#rabaDB db keeps an internal registery to ensure that you object are never duplicated
-		sameGeorges = Human(name = 'Georges')
-		
 Schemaless?
 -----------
 
