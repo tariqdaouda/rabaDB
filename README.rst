@@ -78,8 +78,8 @@ RabaDB has only **four** variable types:
 *RList:
 	- A list of anything
 
-Example
--------
+99% of what you need to know in one example
+--------------------------------------------
 
 .. code:: python
 	
