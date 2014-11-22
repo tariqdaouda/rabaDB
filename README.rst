@@ -17,12 +17,12 @@ rabaDB is a lightweight, borderline NoSQL, uncomplicated, ORM on top of sqlite3.
 
 Basicly it means:
 
-* **Uncomplicated syntax**
-* **No SQL knowledge needed**: Supports queries by example
-* But **you can still use SQL**
-* **Lazy and Optimized**: objects are only fully loaded if you need them to be
-* Super easy installation, **no dependencies**
-* **Somewhat Schemaless**: You can modify field definitions whenever you want and it will automatically adapt to the new schema
+* *Uncomplicated syntax*
+* *No SQL knowledge needed*: Supports queries by example
+* But *you can still use SQL*
+* *Lazy and Optimized*: objects are only fully loaded if you need them to be
+* *No dependencies*: Super easy installation 
+* *Somewhat Schemaless*: You can modify field definitions whenever you want and it will automatically adapt to the new schema
 
 Can it be used for "big projects"?
 ----------------------------------
