@@ -219,6 +219,7 @@ And counts?
 Here's how you do counts
 
 .. code:: python
+
 	from rabaDB.filters import *
 	
 	f = RabaQuery(Human)
@@ -236,5 +237,6 @@ RabaDb has an extensive debugging tools that you can access through the namespac
  	import rabaDB.rabaSetup
  	dbConf = rabaDB.rabaSetup.RabaConfiguration("mynamespace")
 
-Is it really schemaless ?
-------------------------
+Schemaless?
+------------
+ Work in progress
