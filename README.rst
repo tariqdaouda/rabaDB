@@ -137,8 +137,8 @@ No problem:
 
 Querying by example
 -------------------
-Querying by example is done by creating filters, all the conditions inside the same filter are merged by "And"
-and filters between them are merged by "Or".
+Querying by example is done by creating filters, all the conditions inside the same filter are merged by **And**
+and filters between them are merged by **Or**.
 
 .. code::
 
@@ -198,7 +198,7 @@ You can also write your own SQL *WHERE* conditions
 Getting raw SQL 
 ----------------
 
-By default all querying functions return raba Object, but you can always ask for the raw SQL tuple:
+By default all querying functions return raba Object, but you can always ask for the raw ***SQL*** tuple:
 
 .. code:: python
 	
