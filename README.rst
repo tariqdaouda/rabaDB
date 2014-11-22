@@ -100,6 +100,9 @@ Example
 		#Only Cars can fit into this relation
 		cars = rf.Relation('Car')
 		
+		#best friend can only be a human
+		bestFriend = rf.RabaObject('Human')
+		
 		def __init__(self) :
 			pass
 	
