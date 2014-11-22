@@ -56,7 +56,7 @@ There's also a connection object associated to the namespace
 
 .. code:: python
 	
-	myConf = RabaConnnection('test')
+	myConn = RabaConnnection('test')
 	
 
 To know what you can do with that, have a look at the debugging part.
