@@ -261,7 +261,7 @@ rabaDB keeps an internal registery to ensure a strong object consistency. If you
 	georges = Human(name = 'Georges')
 	sameGeorges = Human(name = 'Georges')
 
-You get two times the same object, every modification you do to georges is also applied on sameGeorges,
+You get two times the same object, every modification you do to georges is also applied to sameGeorges,
 because georges **is** sameGeorges. This rules applies to any form of queries.
 
 However keep in mind that the registery will also prevent the garbage collector from erasing raba objects, and
