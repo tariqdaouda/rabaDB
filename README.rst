@@ -13,14 +13,16 @@ That's it, no need for anything else.
 What's rabaDB?
 --------------
 
-rabaDB is a lightweight uncomplicated schemaless ORM on top of sqlite3.
+rabaDB is a lightweight, borderline NoSQL, uncomplicated, ORM on top of sqlite3.
 
 Basicly it means:
 
-* Uncomplicated syntax
-* Lazy and Optimized: objects are only fully loaded if you need them to be
-* Supports Queries by examples and SQL
-* Super easy installation, no dependencies
+* **Uncomplicated syntax**
+* **No SQL knowledge needed**: Supports queries by example
+* But **you can still use SQL**
+* **Lazy and Optimized**: objects are only fully loaded if you need them to be
+* Super easy installation, **no dependencies**
+* **Somewhat Schemaless**: You can modify field definitions whenever you want and it will automatically adapt to the new schema
 
 Can it be used for "big projects"?
 ----------------------------------
@@ -57,7 +59,6 @@ There's also a connection object associated to the namespace
 .. code:: python
 	
 	myConn = RabaConnnection('test')
-	
 
 To know what you can do with that, have a look at the debugging part.
 
