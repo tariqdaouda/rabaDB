@@ -32,6 +32,53 @@ whole genomes annonations, along with huge sets of polymorphisms: millions of en
 
 .. _pyGeno: https://github.com/tariqdaouda/pyGeno
 
+99% of what you need to know in one Example
+--------------------------------------------
+
+.. code:: python
+	
+	#The initialisation
+	from rabaDB.rabaSetup import *
+	RabaConfiguration('test_namespace', './dbTest_BasicExample.db')
+	import rabaDB.Raba as R
+	import rabaDB.fields as rf
+	
+	class Human(R.Raba) :
+		_raba_namespace = 'test_namespace'
+		
+		#Everything that is not a raba object is primitive
+		name = rf.Primitive()
+		age = rf.Primitive()
+		city = rf.Primitive()
+		
+		#Only Cars can fit into this relation
+		cars = rf.Relation('Car')
+		
+		#best friend can only be a human
+		bestFriend = rf.RabaObject('Human')
+		
+		def __init__(self) :
+			pass
+	
+	class Car(R.Raba) :
+		_raba_namespace = 'test_namespace'
+	
+		number = rf.Primitive()
+		def __init__(self) :
+			pass
+	
+	if __name__ == '__main__':
+		georges = Human()
+		georges.name = 'Georges'
+		for i in range(10) :
+			car = Car()
+			car.number = i
+			georges.cars.append(car)
+	
+		#saving georges also saves all his cars to the db
+		georges.save()
+
+
 
 What's a namespace?
 -------------------
@@ -77,52 +124,6 @@ RabaDB has only **four** variable types:
 	- A list of only a certain type of RabaObject 
 *RList:
 	- A list of anything
-
-99% of what you need to know in one example
---------------------------------------------
-
-.. code:: python
-	
-	#The initialisation
-	from rabaDB.rabaSetup import *
-	RabaConfiguration('test', './dbTest_BasicExample.db')
-	import rabaDB.Raba as R
-	import rabaDB.fields as rf
-	
-	class Human(R.Raba) :
-		_raba_namespace = 'test'
-		
-		#Everything that is not a raba object is primitive
-		name = rf.Primitive()
-		age = rf.Primitive()
-		city = rf.Primitive()
-		
-		#Only Cars can fit into this relation
-		cars = rf.Relation('Car')
-		
-		#best friend can only be a human
-		bestFriend = rf.RabaObject('Human')
-		
-		def __init__(self) :
-			pass
-	
-	class Car(R.Raba) :
-		_raba_namespace = 'test'
-	
-		number = rf.Primitive()
-		def __init__(self) :
-			pass
-	
-	if __name__ == '__main__':
-		georges = Human()
-		georges.name = 'Georges'
-		for i in range(10) :
-			car = Car()
-			car.number = i
-			georges.cars.append(car)
-	
-		#saving georges also saves all his cars to the db
-		georges.save()
 
 Schemaless?
 -----------
