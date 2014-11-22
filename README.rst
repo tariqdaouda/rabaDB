@@ -123,8 +123,18 @@ Example
 	
 		#saving georges also saves all his cars to the db
 		georges.save()
-		
+
+#rabaDB db keeps an internal registery to ensure that you object are never duplicated
 		sameGeorges = Human(name = 'Georges')
+		
+Schemaless?
+-----------
+
+rabaDB allows you to change the schemas of your classes on the fly. That means that you can add and remove fields
+from your class definitions at any moment during the developement and rabaDB will take care of composing with the
+SQL backend. However keep in mind that whenever you remove a field, all the information relative to this field
+are lost for ever.
+You can even erase whole class definitions from you code, and rabaDB will automatically update the database.
 
 Indexation
 -----------
@@ -138,6 +148,17 @@ No problem:
 	
 	#To drop an index
 	Human.dropIndex('name')
+
+Brutal Querying 
+---------------
+
+You can do things like:
+
+.. code:: python
+
+	georges = Human(name = 'Georges')
+
+And rabaDB will try to find a match for you.
 
 Querying by example
 -------------------
@@ -230,6 +251,30 @@ Here's how you do counts
 	f.addFilter(age = "22")
 	print f.count()
 
+Registery:
+---------
+
+rabaDB keeps an internal registery to ensure a strong object consistency. If you do:
+
+.. code:: python
+	
+	georges = Human(name = 'Georges')
+	sameGeorges = Human(name = 'Georges')
+
+You get two times the same object, every modification you do to georges is also applied on sameGeorges,
+because georges **is** sameGeorges. This rules applies to any form of queries.
+
+However keep in mind that the registery will also prevent the garbage collector from erasing raba objects, and
+that can lead to "memory leak"-like situations. The way that is by telling raba that you
+no longer need some objects to be registered:
+
+.. code:: python
+
+	form rabaDB.Raba import *
+	
+	_unregisterRabaObjectInstance(georges)
+
+
 Debugging
 ---------
 
@@ -269,14 +314,6 @@ You can group several queries into one single transaction
  	conn.beginTransaction()
  	#a lot of object saving
  	conn.endTransaction()
-
-Schemaless?
------------
-
-rabaDB allows you to change the schemas of your classes on the fly. That means that you can add and remove fields
-from your class definitions at any moment during the developement and rabaDB will take care of composing with the
-SQL backend. However keep in mind that whenever you remove a field, all the information relative to this field
-are lost for ever.
 
 Inheritence
 -----------
