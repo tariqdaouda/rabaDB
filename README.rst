@@ -268,5 +268,28 @@ You can group several queries into one single transaction
  	conn.endTransaction()
 
 Schemaless?
-------------
- Work in progress
+-----------
+
+rabaDB allows you to change the schemas of your classes on the fly. That means that you can add and remove fields
+from your class definitions at any moment during the developement and rabaDB will take care of composing with the
+SQL backend. However keep in mind that whenever you remove a field, all the information relative to this field
+are lost for ever.
+
+Inheritence
+-----------
+
+rabaDB fully supports inheritence. Children classes automatically inherit the fields of their parents.
+rabaDB also supports abstract classes, that is to say classes that never meant to be instanciated and that only
+serve as templates for other classes. Abstract classes have no effect on the database
+
+Here's how you declare an abstract classes:
+
+.. code:: python
+	
+	class pyGenoRabaObject(Raba) :
+
+		_raba_namespace = "pyGeno"
+		_raba_abstract = True # abstractness
+		
+		name = rf.Primitive()
+		
