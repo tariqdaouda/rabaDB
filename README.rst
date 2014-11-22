@@ -10,8 +10,8 @@ Installation:
 
 That's it, no need for anything else.
 
-What's rabaDB
--------------
+What's rabaDB?
+--------------
 
 rabaDB is a lightweight uncomplicated schemaless ORM on top of sqlite3.
 
@@ -31,7 +31,7 @@ whole genomes annonations, along with huge sets of polymorphisms, millions of en
 .. _pyGeno: https://github.com/tariqdaouda/pyGeno
 
 
-What's a namespace ?
+What's a namespace?
 -------------------
 
 You can think of rabaDB's namespace as independent databases. Each namespace has a name a file where all the data
@@ -56,7 +56,7 @@ There's also a connection object associated to the namespace
 
 .. code:: python
 	
-	myConf = RabaConfiguration('test')
+	myConf = RabaConnnection('test')
 	
 
 To know what you can do with that, have a look at the debugging part.
