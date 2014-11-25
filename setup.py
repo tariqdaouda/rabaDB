@@ -45,7 +45,7 @@ setup(
         'Programming Language :: Python :: 2.7',
     ],
 
-    keywords='database ORM sqlite3',
+    keywords='NoSQL database ORM sqlite3',
 
     packages=find_packages(exclude=['trash']),
 
