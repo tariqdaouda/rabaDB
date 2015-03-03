@@ -250,10 +250,10 @@ Here's how you do counts
 	f.addFilter(age = "22")
 	print f.count()
 
-Registery
+Registry
 ---------
 
-rabaDB keeps an internal registery to ensure a strong object consistency. If you do:
+rabaDB keeps an internal registry to ensure a strong object consistency. If you do:
 
 .. code:: python
 	
