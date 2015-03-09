@@ -1,4 +1,4 @@
-Save, Search, Modify your objects easily. You're welcome.
+Lightweight Object Persistency for python.
 =========================================================
 
 Installation
