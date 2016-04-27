@@ -168,7 +168,9 @@ class _RabaSingleton_MetaClass(type) :
 			columns = {}
 			columnsToLowerCase = {}
 			getFields_rec(name, sqlFields, columns, columnsToLowerCase, dct, bases)
-
+			columns["raba_id"] = 0
+			columns['json'] = 1
+			
 			try :
 				con = RabaConnection(dct['_raba_namespace'])
 			except KeyError :
