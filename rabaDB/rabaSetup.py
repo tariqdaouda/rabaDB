@@ -45,7 +45,12 @@ class RabaConnection(object) :
 
 	def __init__(self, namespace) :
 
-		self.connection = sq.connect(RabaConfiguration(namespace).dbFile)
+		try :
+			self.connection = sq.connect(RabaConfiguration(namespace).dbFile)
+		except sqlite3.OperationalError as e:
+			print("Unable to open database file: %s" % RabaConfiguration(namespace).dbFile)
+			raise e
+		
 		self.namespace = namespace
 		self.loadedRabaClasses = {}
 		self.saveIniator = None
