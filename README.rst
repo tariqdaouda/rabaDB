@@ -1,3 +1,7 @@
+.. image:: http://depsy.org/api/package/pypi/rabaDB/badge.svg
+   :alt: depsy
+   :target: http://depsy.org/package/python/rabaDB
+ 
 Lightweight Object Persistency for python.
 =========================================================
 
