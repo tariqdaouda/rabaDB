@@ -284,7 +284,7 @@ class _RabaSingleton_MetaClass(type) :
 
 		if dbLine != None :
 			if ret.fetchone() != None :
-				raise ValueError("More than one object fit the arguments you've prodided to the constructor")
+				raise ValueError("More than one object fit the arguments you've provided to the constructor")
 
 			raba_id = dbLine[0]
 			try :
@@ -300,7 +300,7 @@ class _RabaSingleton_MetaClass(type) :
 				_registerRabaObjectInstance(obj)
 		
 		elif len(params) > 0 : # params provided but no result
-			raise KeyError("Couldn't find any object that fit the arguments you've prodided to the constructor")
+			raise KeyError("Couldn't find any object that fit the arguments you've provided to the constructor")
 		else :
 			obj = type.__call__(cls, *args, **fieldsDct)
 			obj._raba__init__(**fieldsDct)
