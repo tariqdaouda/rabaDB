@@ -1,3 +1,10 @@
+1.0.4
+=====
+
+* Minor bug fixes
+* Typos
+* More explicit error messages
+
 1.0.3:
 =======
 
