@@ -233,6 +233,11 @@ By default all querying functions return raba Object, but you can always ask for
 	f.run(raw = True)
 	f.runWere(("age = ?, name = ?" , (22, "fela"), raw = True)
 
+Supported operators for queries
+--------------------------------
+
+The supported operators are: 'LIKE', '=', '<', '>', '=', '>=', '<=', '<>', '!=', 'IS'
+
 Yes, but I just want to loop through the results  
 ------------------------------------------------
 
