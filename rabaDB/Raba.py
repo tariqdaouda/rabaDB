@@ -883,7 +883,7 @@ class RabaList(MutableSequence) :
 						objDct = e.getDctDescription()
 						values.append((self.anchorObj.raba_id, None, RabaFields.RABA_FIELD_TYPE_IS_RABA_OBJECT, e._rabaClass.__name__, e.raba_id, e._raba_namespace))
 					elif isPythonPrimitive(e) :
-						values.append((self.anchorObj.raba_id, e, RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE), None, None, None)
+						values.append((self.anchorObj.raba_id, e, RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE, None, None, None))
 					else :
 						values.append((self.anchorObj.raba_id, buffer(cPickle.dumps(e)), RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE, None, None, None))
 
