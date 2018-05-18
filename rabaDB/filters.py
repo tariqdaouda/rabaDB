@@ -228,7 +228,7 @@ You will have to break your query into several smaller one. Sorry about that. (a
 	def runWhere(self, whereAndTail, params = (), raw = False) :
 		"""You get to write your own where + tail clauses. If raw, returns the raw tuple data (not wrapped into a raba object).If raw, returns the raw tuple data (not wrapped into a raba object)"""
 		
-		sql = "SELECT %s.raba_id FROM %s whereAndTail %s" % (self.rabaClass.__name__, self.rabaClass.__name__, whereAndTail)
+		sql = "SELECT %s.raba_id FROM %s WHERE %s" % (self.rabaClass.__name__, self.rabaClass.__name__, whereAndTail)
 		cur = self.con.execute(sql, params)
 		res = []
 		for v in cur :
@@ -243,7 +243,7 @@ You will have to break your query into several smaller one. Sorry about that. (a
 		For more info see iterGet()
 		"""
 		
-		sql = "SELECT %s.raba_id FROM %s whereAndTail %s" % (self.rabaClass.__name__, self.rabaClass.__name__, whereAndTail)
+		sql = "SELECT %s.raba_id FROM %s WHERE %s" % (self.rabaClass.__name__, self.rabaClass.__name__, whereAndTail)
 		cur = self.con.execute(sql, params)
 		res = []
 		for v in cur :
