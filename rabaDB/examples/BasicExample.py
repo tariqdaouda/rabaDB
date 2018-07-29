@@ -2,7 +2,7 @@ from rabaDB.rabaSetup import *
 RabaConfiguration('test', './dbTest_BasicExample.db')
 import rabaDB.Raba as R
 from rabaDB.filters import *
-from rabaDB.fields import *
+import rabaDB.fields as rf
 
 class Human(R.Raba) :
 	_raba_namespace = 'test'
