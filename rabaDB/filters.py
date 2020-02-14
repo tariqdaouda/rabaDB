@@ -1,8 +1,9 @@
-import re, types
+import re
+import warnings
 
-import rabaSetup as stp
-from Raba import *
-import fields as RabaFields
+from . import rabaSetup as stp
+from .Raba import *
+from . import fields as RabaFields
 
 #####
 # TODO
@@ -49,10 +50,10 @@ class RabaQuery :
 		self.reset(rabaClass, namespace)
 
 	def reset(self, rabaClass, namespace = None) :
-		"""rabaClass can either be a raba class of a string of a raba class name. In the latter case you must provide the namespace argument.
+		"""rabaClass can either be a raba class or a string of a raba class name. In the latter case you must provide the namespace argument.
 		If it's a Raba Class the argument is ignored. If you fear cicular imports use strings"""
 
-		if type(rabaClass) is types.StringType :
+		if type(rabaClass) is str :
 			self._raba_namespace = namespace
 			self.con = stp.RabaConnection(self._raba_namespace)
 			self.rabaClass = self.con.getClass(rabaClass)
@@ -75,10 +76,10 @@ class RabaQuery :
 
 	def addFilter(self, *lstFilters, **dctFilters) :
 		"add a new filter to the query"
-
+		
 		dstF = {}
 		if len(lstFilters) > 0 :
-			if type(lstFilters[0]) is types.DictType :
+			if type(lstFilters[0]) is dict :
 				dstF = lstFilters[0]
 				lstFilters = lstFilters[1:]
 
@@ -86,7 +87,7 @@ class RabaQuery :
 			dstF = dict(dstF, **dctFilters)
 
 		filts = {}
-		for k, v in dstF.iteritems() :
+		for k, v in dstF.items() :
 			sk = k.split(' ')
 			if len(sk) == 2 :
 				operator = sk[-1].strip().upper()
@@ -159,8 +160,8 @@ class RabaQuery :
 		# print self.filters
 		for f in self.filters :
 			filt = []
-			for k, vv in f.iteritems() :
-				if type(vv) is types.ListType or type(vv) is types.TupleType :
+			for k, vv in f.items() :
+				if type(vv) is list or type(vv) is tuple :
 					sqlValues.extend(vv)
 					kk = 'OR %s ? '%k * len(vv)
 					kk = "(%s)" % kk[3:]
@@ -192,12 +193,14 @@ You will have to break your query into several smaller one. Sorry about that. (a
 		return (sql, sqlValues)
 
 	def iterRun(self, sqlTail = '', raw = False) :
-		"""Compile filters and run the query and returns an iterator. This much more efficient for large data sets but
+		"""Compile filters and run the query and returns a generator. This much more efficient for large data sets but
 		you get the results one element at a time. One thing to keep in mind is that this function keeps the cursor open, that means that the sqlite databae is locked (no updates/inserts etc...) until all
 		the elements have been fetched. For batch updates to the database, preload the results into a list using get, then do you updates.
 		You can use sqlTail to add things such as order by
 		If raw, returns the raw tuple data (not wrapped into a raba object)"""
 
+		warnings.warn("At some point in the future 'iterRun' will stop existing and will get replaced by 'run'. If you have functions still using the iter method, you should start changing them now. These changes are in conformity with python3 as opposed to the now-deprecated python2.", DeprecationWarning)
+		
 		sql, sqlValues = self.getSQLQuery()
 		cur = self.con.execute('%s %s'% (sql, sqlTail), sqlValues)
 		for v in cur :
@@ -206,42 +209,54 @@ You will have to break your query into several smaller one. Sorry about that. (a
 			else :
 				yield v
 			
-	def run(self, sqlTail = '', raw = False) :
+	def run(self, sqlTail = '', raw = False, gen=False):
 		"""Compile filters and run the query and returns the entire result. You can use sqlTail to add things such as order by. If raw, returns the raw tuple data (not wrapped into a raba object)"""
-		sql, sqlValues = self.getSQLQuery()
-		cur = self.con.execute('%s %s'% (sql, sqlTail), sqlValues)
-
-		res = []
-		for v in cur :
-			if not raw :
-				res.append(RabaPupa(self.rabaClass, v[0]))
-			else :
-				return v
 		
-		return res
+		warnings.warn("At some point in the future 'run' will be returning a generator by default (gen=True). If you want to use the output in a list format, you can just wrap your call with list(). These changes are in conformity with python3 as opposed to the now-deprecated python2.", DeprecationWarning)		
+		
+		if gen:
+			return self.iterRun(sqlTail, raw)
+		else:
+			sql, sqlValues = self.getSQLQuery()
+			cur = self.con.execute('%s %s'% (sql, sqlTail), sqlValues)
+			
+			res = []
+			for v in cur:
+				if not raw :
+					res.append(RabaPupa(self.rabaClass, v[0]))
+				else:
+					return v
+				return res
 	
 	def count(self, sqlTail = '') :
 		"Compile filters and counts the number of results. You can use sqlTail to add things such as order by"
 		sql, sqlValues = self.getSQLQuery(count = True)
 		return int(self.con.execute('%s %s'% (sql, sqlTail), sqlValues).fetchone()[0])
 		
-	def runWhere(self, whereAndTail, params = (), raw = False) :
+	def runWhere(self, whereAndTail, params = (), raw = False, gen=False):
 		"""You get to write your own where + tail clauses. If raw, returns the raw tuple data (not wrapped into a raba object).If raw, returns the raw tuple data (not wrapped into a raba object)"""
 		
-		sql = "SELECT %s.raba_id FROM %s WHERE %s" % (self.rabaClass.__name__, self.rabaClass.__name__, whereAndTail)
-		cur = self.con.execute(sql, params)
-		res = []
-		for v in cur :
-			if not raw :
-				res.append(RabaPupa(self.rabaClass, v[0]))
-			else :
-				return v
-		return res
+		warnings.warn("At some point in the future 'runWhere' will be returning a generator by default (generator=True). If you want to use the output in a list format, you can just wrap your call with list(). These changes are in conformity with python3 as opposed to the now-deprecated python2.", DeprecationWarning)
+		
+		if gen:
+			return self.iterRunWhere(whereAndTail, params, raw)
+		else:
+			sql = "SELECT %s.raba_id FROM %s WHERE %s" % (self.rabaClass.__name__, self.rabaClass.__name__, whereAndTail)
+			cur = self.con.execute(sql, params)
+			res = []
+			for v in cur :
+				if not raw :
+					res.append(RabaPupa(self.rabaClass, v[0]))
+				else:
+					return v
+			return res
 
 	def iterRunWhere(self, whereAndTail, params = (), raw = False) :
 		"""You get to write your own where + tail clauses. If raw, returns the raw tuple data (not wrapped into a raba object).If raw, returns the raw tuple data (not wrapped into a raba object).
 		For more info see iterGet()
 		"""
+		
+		warnings.warn("At some point in the future 'iterRunWhere' will stop existing and will get replaced by 'runWhere'. If you have functions still using the iter method, you should start changing them now. These changes are in conformity with python3 as opposed to the now-deprecated python2.", DeprecationWarning)
 		
 		sql = "SELECT %s.raba_id FROM %s WHERE %s" % (self.rabaClass.__name__, self.rabaClass.__name__, whereAndTail)
 		cur = self.con.execute(sql, params)
@@ -288,4 +303,4 @@ if __name__ == '__main__' :
 	rq.addFilter({'b->c' : c})
 	#rq.addFilter(['b->c.name = C'])
 	for a in rq.run() :
-		print a
+		print(a)
