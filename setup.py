@@ -11,7 +11,7 @@ with open(path.join(here, 'DESCRIPTION.rst'), encoding='utf-8') as f:
 setup(
     name='rabaDB',
 
-    version='1.1',
+    version='2.0',
 
     description="Store, Search, Modify your objects easily. You're welcome.",
     long_description=long_description,
