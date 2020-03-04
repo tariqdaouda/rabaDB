@@ -1,9 +1,9 @@
 import sqlite3 as sq
-import os, copy, types, cPickle, random, json, abc, sys#, weakref
+import os, copy, pickle, random, json, abc, sys
 from collections import MutableSequence
 
-from rabaSetup import RabaConnection, RabaConfiguration
-import fields as RabaFields
+from .rabaSetup import RabaConnection, RabaConfiguration
+from . import fields as RabaFields
 
 def _recClassCheck(v, cls) :
 	if v is cls : return True
@@ -31,7 +31,7 @@ def isRabaObjectPupa(v) :
 	return _recClassCheck(v.__class__, RabaPupa)
 
 def isPythonPrimitive(v) :
-	primTypes = [types.IntType, types.LongType, types.FloatType, types.StringType, types.UnicodeType, types.BufferType, types.NoneType]
+	primTypes = [int, int, float, bytes, str, memoryview, type(None)]
 	for t in primTypes :
 		if isinstance(v, t) :
 			return True
@@ -153,7 +153,7 @@ class _RabaSingleton_MetaClass(type) :
 					for base in bases :
 						i += getFields_rec(base.__name__, sqlFields, columns, columnsToLowerCase, base.__dict__, base.__bases__)
 
-				for k, v in dct.iteritems() :
+				for k, v in dct.items() :
 					if RabaFields.isField(v) :
 						sk = str(k)
 						if k.lower() != 'raba_id' and k.lower() != 'json' :
@@ -179,7 +179,7 @@ class _RabaSingleton_MetaClass(type) :
 			uniqueStr = ''
 			if '_raba_uniques' in dct :
 				for c in dct['_raba_uniques'] :
-					if type(c) is types.StringType :
+					if type(c) is str :
 						uniqueStr += 'UNIQUE (%s) ON CONFLICT REPLACE, ' % c
 					elif len(c) == 1 :
 						uniqueStr += 'UNIQUE (%s) ON CONFLICT REPLACE, ' % c[0]
@@ -333,15 +333,13 @@ def removeFromRegistery(obj) :
 	elif isRabaList(obj) :
 		_unregisterRabaListInstance(obj)	
 
-class RabaPupa(object) :
+class RabaPupa(object, metaclass=_RabaPupaSingleton_Metaclass) :
 	"""One of the founding principles of RabaDB is to separate the storage from the code. Fields are stored in the DB while the processing only depends
 	on your python code. This approach ensures a higher degree of stability by preventing old objects from lurking inside the DB before popping out of nowhere several decades afterwards.
 	According to this apparoach, raba objects are not serialised but transformed into pupas before being stored. A pupa is a very light object that contains only a reference
 	to the raba object class, and it's unique raba_id. Upon asking for one of the attributes of a pupa, it magically transforms into a full fledged raba object. This process is completly transparent to the user. Pupas also have the advantage of being light weight and also ensure that the only raba objects loaded are those explicitely accessed, thus potentialy saving a lot of memory.
 	For a pupa self._rabaClass refers to the class of the object "inside" the pupa.
 	"""
-
-	__metaclass__ = _RabaPupaSingleton_Metaclass
 
 	def __init__(self, classObj, raba_id) :
 		self._rabaClass = classObj
@@ -362,7 +360,7 @@ class RabaPupa(object) :
 		dbLine = connection.getRabaObjectInfos(getAttr('_rabaClass').__name__, {'raba_id' : uniqueId}).fetchone()
 		setAttr('__class__', rabaClass)
 		purge = getAttr('__dict__').keys()
-		for k in purge :
+		for k in list(purge) :
 			delattr(self, k)
 
 		self._rabaClass = rabaClass
@@ -376,7 +374,7 @@ class RabaPupa(object) :
 
 	def getJsonEncoding(self) :
 		"returns a json encoding of self.getDctDescription()"
-		return json.dumps(self.getDctDescription())
+		return json.dumps(self.getDctDescription(), sort_keys=True)  # sort_keys added during migration to python3
 
 	def __getattr__(self, name) :
 		develop = object.__getattribute__(self, "develop")
@@ -391,9 +389,8 @@ class RabaPupa(object) :
 	def __repr__(self) :
 		return "<RabaObj pupa: %s, raba_id %s>" % (self._rabaClass.__name__, self.raba_id)
 
-class Raba(object):
+class Raba(object, metaclass=_RabaSingleton_MetaClass):
 	"All raba object inherit from this class"
-	__metaclass__ = _RabaSingleton_MetaClass
 	raba_id = RabaFields.Primitive()
 	json = RabaFields.Primitive()
 	_raba_abstract = True
@@ -413,12 +410,12 @@ class Raba(object):
 		self.json = dbLine[self.__class__.columns['json']]
 
 		lists = []
-		for kk, i in self.columns.iteritems() :
+		for kk, i in self.columns.items() :
 			k = self.columnsToLowerCase[kk.lower()]
 			elmt = getattr(self._rabaClass, k)
 			if RabaFields.isPrimitiveField(elmt) :
 				try :
-					self.__setattr__(k, cPickle.loads(str(dbLine[i])))
+					self.__setattr__(k, pickle.loads(str(dbLine[i])))
 				except :
 					self.__setattr__(k, dbLine[i])
 
@@ -480,7 +477,7 @@ class Raba(object):
 		ff = []
 		rlf = []
 		tmpf = []
-		if type(fields) is types.StringType :
+		if type(fields) is str :
 			tmpf.append(fields)
 		else :
 			tmpf = fields
@@ -555,7 +552,7 @@ class Raba(object):
 			if not self.raba_id :
 				raise ValueError("Field raba_id of self has the not int value %s therefore i cannot save the object, sorry" % (self, self.raba_id))
 			
-			for k, v in self.listsToSave.iteritems() :
+			for k, v in self.listsToSave.items() :
 				v._save()
 				self.sqlSave[k] = len(v)
 				if not self._saved : #this dict is only for optimisation purpose for generating the insert sql
@@ -566,11 +563,11 @@ class Raba(object):
 				self.sqlSaveQMarks['json'] = '?'
 
 			if not self._saved :
-				values = self.sqlSave.values()
-				sql = 'INSERT INTO %s (%s) VALUES (%s)' % (self.__class__.__name__, ', '.join(self.sqlSave.keys()), ', '.join(self.sqlSaveQMarks.values()))
+				values = list(self.sqlSave.values())
+				sql = 'INSERT INTO %s (%s) VALUES (%s)' % (self.__class__.__name__, ', '.join(list(self.sqlSave.keys())), ', '.join(list(self.sqlSaveQMarks.values())))
 			else :
-				values = self.sqlSave.values()
-				sql = 'UPDATE %s SET %s = ? WHERE raba_id = ?' % (self.__class__.__name__, ' = ?, '.join(self.sqlSave.keys()))
+				values = list(self.sqlSave.values())
+				sql = 'UPDATE %s SET %s = ? WHERE raba_id = ?' % (self.__class__.__name__, ' = ?, '.join(list(self.sqlSave.keys())))
 				values.append(self.raba_id)
 
 			self.connection.execute(sql, values)
@@ -582,7 +579,7 @@ class Raba(object):
 
 	def delete(self) :
 		if self._saved :
-			for c in self.columnsToLowerCase.itervalues() :
+			for c in self.columnsToLowerCase.values() :
 				if isRabaList(getattr(self, c)) :
 					getattr(self, c).empty()
 			self.connection.delete(table = self.__class__.__name__, where = 'raba_id = ?', values = (self.raba_id, ))
@@ -599,7 +596,7 @@ class Raba(object):
 
 	def getJsonEncoding(self) :
 		"returns a json encoding of self.getDctDescription()"
-		return json.dumps(self.getDctDescription())
+		return json.dumps(self.getDctDescription(), sort_keys=True)  # sort_keys added during migration to python3
 
 	def set(self, **args) :
 		"set multiple values quickly, ex : name = woopy"
@@ -620,7 +617,7 @@ class Raba(object):
 				elif isPythonPrimitive(vv):
 					vSQL = vv
 				else :
-					vSQL = buffer(cPickle.dumps(vv))
+					vSQL = memoryview(pickle.dumps(vv))
 
 				self.sqlSave[k] = vSQL
 
@@ -681,10 +678,9 @@ class Raba(object):
 		"returns a string of lisinting available fields"
 		return 'Available fields for %s: %s' %(cls.__name__, ', '.join(cls.getFields()))
 
-class RabaListPupa(MutableSequence) :
+class RabaListPupa(MutableSequence, metaclass=_RabaListPupaSingleton_Metaclass) :
 
 	_isRabaList = True
-	__metaclass__ = _RabaListPupaSingleton_Metaclass
 
 	def __init__(self, **kwargs) :
 		self._runtimeId = (self.__class__.__name__, random.random()) #this is using only during runtime ex, to avoid circular calls
@@ -710,7 +706,7 @@ class RabaListPupa(MutableSequence) :
 		#initFromPupa['raba_id'] = MutableSequence.__getattribute__(self, 'raba_id')
 
 		purge = MutableSequence.__getattribute__(self, '__dict__').keys()
-		for k in purge :
+		for k in list(purge) :
 			delattr(self, k)
 
 		RabaList.__init__(self, initFromPupa = initFromPupa)
@@ -759,12 +755,11 @@ class RabaListPupa(MutableSequence) :
 			self.develop()
 		return self.length
 
-class RabaList(MutableSequence) :
+class RabaList(MutableSequence, metaclass=_RabaListSingleton_Metaclass) :
 	"""A RabaList is a list that can only contain Raba objects of the same class or (Pupas of the same class). They represent one to many relations and are stored in separate
 	tables that contain only one single line"""
 
 	_isRabaList = True
-	__metaclass__ = _RabaListSingleton_Metaclass
 
 	def _checkElmt(self, v) :
 		if self.anchorObj != None :
@@ -885,7 +880,7 @@ class RabaList(MutableSequence) :
 					elif isPythonPrimitive(e) :
 						values.append((self.anchorObj.raba_id, e, RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE, None, None, None))
 					else :
-						values.append((self.anchorObj.raba_id, buffer(cPickle.dumps(e)), RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE, None, None, None))
+						values.append((self.anchorObj.raba_id, memoryview(pickle.dumps(e)), RabaFields.RABA_FIELD_TYPE_IS_PRIMITIVE, None, None, None))
 
 				self.connection.executeMany('INSERT INTO %s (anchor_raba_id, value, type, obj_raba_class_name, obj_raba_id, obj_raba_namespace) VALUES (?, ?, ?, ?, ?, ?)' % self.tableName, values)
 

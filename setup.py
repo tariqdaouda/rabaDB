@@ -11,7 +11,7 @@ with open(path.join(here, 'DESCRIPTION.rst'), encoding='utf-8') as f:
 setup(
     name='rabaDB',
 
-    version='1.0.5',
+    version='2.0',
 
     description="Store, Search, Modify your objects easily. You're welcome.",
     long_description=long_description,
@@ -42,7 +42,7 @@ setup(
 
         'License :: OSI Approved :: Apache Software License',
 
-        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.7',
     ],
 
     keywords='NoSQL database ORM sqlite3',
@@ -56,8 +56,8 @@ setup(
     #~ install_requires=[],
 
     # If there are data files included in your packages that need to be
-    # installed, specify them here.  If using Python 2.6 or less, then these
-    # have to be included in MANIFEST.in as well.
+    # installed, specify them here.  OBSOLETE [If using Python 2.6 or less, then these
+    # have to be included in MANIFEST.in as well.]
     #~ package_data={
         #~ 'sample': ['package_data.dat'],
     #~ },

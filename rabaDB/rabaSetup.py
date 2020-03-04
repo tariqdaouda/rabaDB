@@ -1,4 +1,4 @@
-import time, types, hashlib, sys
+import time, hashlib, sys
 import sqlite3 as sq
 
 #The limit number of variables in a query in sqlite (http://www.sqlite.org/limits.html). Same name as in sqlite if want to google it
@@ -21,14 +21,13 @@ class RabaNameSpaceSingleton(type):
 			cls._instances[key] = type.__call__(cls, *args, **kwargs)
 		return cls._instances[key]
 
-class RabaConfiguration(object) :
+class RabaConfiguration(object, metaclass=RabaNameSpaceSingleton) :
 	"""This class must be instanciated at the begining of the script just after the import of setup giving it the path to the the DB file. ex :
 
 	from rabaDB.setup import *
 	RabaConfiguration(namespace, './dbTest.db')
 
 	After the first instanciation you can call it without parameters. As this class is a Singleton, it will always return the same instance"""
-	__metaclass__ = RabaNameSpaceSingleton
 
 	def __init__(self, namespace, dbFile = None) :
 		if dbFile == None :
@@ -37,11 +36,9 @@ class RabaConfiguration(object) :
 		#print dbFile
 		self.dbFile = dbFile
 
-class RabaConnection(object) :
+class RabaConnection(object, metaclass=RabaNameSpaceSingleton) :
 	"""A class that manages the connection to the sqlite3 database. Don't be afraid to call RabaConnection() as much as you want. By default Raba tries to be smart and commits only when
 	you save a rabaobject but if you want complete controle over the commit process you can use setAutoCommit(False) and then use commit() manually"""
-
-	__metaclass__ = RabaNameSpaceSingleton
 
 	def __init__(self, namespace) :
 
@@ -104,7 +101,7 @@ class RabaConnection(object) :
 			typ = "INDEX"
 			w = ''
 
-		if type(fields) is types.ListType :
+		if type(fields) is list :
 			return "RABA_%s_%s_%s_on_%s" %(table, typ, w, '_X_'.join(fields))
 		else :
 			return "RABA_%s_%s_%s_on_%s" %(table, typ, w, fields)
@@ -126,7 +123,7 @@ class RabaConnection(object) :
 		else :
 			indexTable = self.makeIndexTableName(table, fields, where, whereValues)
 
-		if type(fields) is types.ListType :
+		if type(fields) is list :
 			sql = "CREATE INDEX IF NOT EXISTS %s on %s(%s)" %(indexTable, table, ', '.join(fields))
 		else :
 			sql = "CREATE INDEX IF NOT EXISTS %s on %s(%s)" %(indexTable, table, fields)
@@ -204,14 +201,14 @@ class RabaConnection(object) :
 
 	def _debugActions(self, sql, values) :
 		if self._debugSQL :
-			print "Next query: %s\nWith params: %s\n(c)ontinue/(s)top:" % (sql, values)
+			print("Next query: %s\nWith params: %s\n(c)ontinue/(s)top:" % (sql, values))
 			while True :
-				val = raw_input().lower()
+				val = input().lower()
 				if val == 's' :
 					raise Exception("DEBUG STOPED!")
 				elif val == 'c' :
 					break
-		elif self._printQueries : print sql, values
+		elif self._printQueries : print(sql, values)
 
 		if self._enableStats :
 			self._logQuery(sql, values)
@@ -236,25 +233,25 @@ class RabaConnection(object) :
 	def printStats(self) :
 		if self._enableStats :
 			t = time.time() - self.startTime
-			print "====Raba Connection %s stats====" % (self.namespace)
+			print("====Raba Connection %s stats====" % (self.namespace))
 			if t < 60 :
-				print "Been running for: %fsc" % t
+				print("Been running for: %fsc" % t)
 			elif t < 3600 :
-				print "Been running for: %fmin" % (t/60)
+				print("Been running for: %fmin" % (t/60))
 			else :
-				print "Been running for: %fh" % (t/3600)
+				print("Been running for: %fh" % (t/3600))
 
-			print 'Query counts: '
-			for k, v in self.queryCounts.iteritems() :
-				print '\t', k
-				print "\t\t raw counts:", v
+			print('Query counts: ')
+			for k, v in self.queryCounts.items() :
+				print('\t', k)
+				print("\t\t raw counts:", v)
 				if self.queryCounts['TOTAL'] > 0 :
-					print "\t\t ratio (total queries):", v/float(self.queryCounts['TOTAL'])
+					print("\t\t ratio (total queries):", v/float(self.queryCounts['TOTAL']))
 				else :
-					print "\t\t ratio (total queries): 0/0"
-				print "\t\t ratio (run time (sc)):", v/t
+					print("\t\t ratio (total queries): 0/0")
+				print("\t\t ratio (run time (sc)):", v/t)
 		else :
-			print "====Raba Connection %s stats====> you must enable stats first" % (self.namespace)
+			print("====Raba Connection %s stats====> you must enable stats first" % (self.namespace))
 
 	def beginTransaction(self) :
 		"Raba commits at each save, unless you begin a transaction in wich cas everything will be commited when endTransaction() is called"
