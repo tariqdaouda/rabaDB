@@ -19,7 +19,7 @@ What's rabaDB?
 
 rabaDB is a lightweight, borderline NoSQL, uncomplicated, ORM on top of sqlite3.
 
-Basicly it means:
+Basically it means:
 
 * *Uncomplicated syntax*
 * *No SQL knowledge needed*: supports queries by example
