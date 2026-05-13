@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rabaDB"
+version = "2.0"
+description = "Store, Search, Modify your objects easily. You're welcome."
+readme = "DESCRIPTION.rst"
+license = "Apache-2.0"
+requires-python = ">=3.9"
+authors = [
+    { name = "Tariq Daouda", email = "tariq.daouda@umontreal.ca" },
+]
+keywords = ["NoSQL", "database", "ORM", "sqlite3"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Database",
+    "Topic :: Database :: Database Engines/Servers",
+    "Topic :: Database :: Front-Ends",
+    "Programming Language :: Python :: 3.14",
+]
+
+[project.urls]
+Homepage = "https://github.com/tariqdaouda/rabaDB"
+
+[project.scripts]
+sample = "sample:main"
+
+[tool.setuptools.packages.find]
+exclude = ["trash", "tests"]

@@ -42,7 +42,8 @@ setup(
 
         'License :: OSI Approved :: Apache Software License',
 
-        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.14',
     ],
 
     keywords='NoSQL database ORM sqlite3',

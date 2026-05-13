@@ -1,6 +1,6 @@
 import sqlite3 as sq
 import os, copy, pickle, random, json, abc, sys
-from collections import MutableSequence
+from collections.abc import MutableSequence
 
 from .rabaSetup import RabaConnection, RabaConfiguration
 from . import fields as RabaFields

@@ -44,7 +44,7 @@ class RabaConnection(object, metaclass=RabaNameSpaceSingleton) :
 
 		try :
 			self.connection = sq.connect(RabaConfiguration(namespace).dbFile)
-		except sqlite3.OperationalError as e:
+		except sq.OperationalError as e:
 			print("Unable to open database file: %s" % RabaConfiguration(namespace).dbFile)
 			raise e
 		
@@ -96,7 +96,7 @@ class RabaConnection(object, metaclass=RabaNameSpaceSingleton) :
 	def makeIndexTableName(self, table, fields, where = '', whereValues = []) :
 		if where != '':
 			typ = "PARTIAL_INDEX"
-			w = hashlib.md5("%s%s" %(where, whereValues)).hexdigest()
+			w = hashlib.md5(("%s%s" %(where, whereValues)).encode()).hexdigest()
 		else :
 			typ = "INDEX"
 			w = ''

@@ -1,6 +1,6 @@
-from setup import *
-from Raba import *
-from filters import *
+from rabaDB.rabaSetup import *
+from rabaDB.Raba import *
+from rabaDB.filters import *
 
 class Gene(Raba) :
 	id = Autoincrement
