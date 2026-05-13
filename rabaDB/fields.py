@@ -1,4 +1,5 @@
 from . import Raba
+from .rabaSetup import RabaConnection
 
 RABA_FIELD_TYPE_IS_UNDEFINED = -1
 RABA_FIELD_TYPE_IS_PRIMITIVE = 0
@@ -60,12 +61,12 @@ class RabaObject(RabaField) :
 		"""rabaClass can either be raba class of a string of a raba class name. In the latter case you must provide the namespace argument.
 		If it's a Raba Class the argument is ignored. If you fear cicular importants use strings"""
 
-		if default != None and not isRabaObject(default) :
+		if default != None and not Raba.isRabaObject(default) :
 			raise ValueError("Default value is not a valid Raba Object")
 
 		RabaField.__init__(self,  default, constrainFct, **constrainFctWArgs)
 		if type(className) is not str :
-			assert isRabaClass(className)
+			assert Raba.isRabaClass(className)
 			self.className = RabaConnection(className._raba_namespace).getClass(className.__name__)
 			self.classNamespace = className._raba_namespace
 		else :

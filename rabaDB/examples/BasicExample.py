@@ -7,8 +7,8 @@ from rabaDB.fields import *
 class Human(R.Raba) :
 	_raba_namespace = 'test'
 
-	name = rf.Primitive()
-	cars = rf.Relation('Car')
+	name = Primitive()
+	cars = Relation('Car')
 	
 	def __init__(self) :
 		pass
